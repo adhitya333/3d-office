@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/jpeg" href="/verlyn-logo.jpg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Verlyn Tech — 3D Interactive Office</title>
+
+    <!-- Instant Preload of Critical Assets -->
+    <link rel="preload" as="image" href="/verlyn-logo.jpg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+    <style>
+      /* Zero-delay splash styles for instant load */
+      #initial-loader {
+        position: fixed;
+        inset: 0;
+        background: #080C16;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1.5rem;
+        z-index: 99999;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        color: #F8FAFC;
+        user-select: none;
+      }
+      .loader-logo-wrap {
+        width: 72px;
+        height: 72px;
+        background: #0F172A;
+        border: 2px solid rgba(6, 182, 212, 0.4);
+        border-radius: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 0 30px rgba(6, 182, 212, 0.25);
+        animation: pulseLogo 2s ease-in-out infinite;
+      }
+      .loader-logo-wrap img {
+        width: 50px;
+        height: 50px;
+        object-fit: contain;
+        filter: invert(1) brightness(1.2);
+      }
+      .loader-bar-bg {
+        width: 220px;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+      .loader-bar-fill {
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, #0284C7, #06B6D4, #38BDF8);
+        border-radius: 4px;
+        animation: loadProgress 1.2s ease-in-out infinite;
+      }
+      @keyframes pulseLogo {
+        0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(6, 182, 212, 0.2); }
+        50% { transform: scale(1.05); box-shadow: 0 0 35px rgba(6, 182, 212, 0.45); }
+      }
+      @keyframes loadProgress {
+        0% { transform: translateX(-100%); }
+        50% { transform: translateX(0%); }
+        100% { transform: translateX(100%); }
+      }
+    </style>
+  </head>
+  <body class="bg-[#080C16] text-slate-100 overflow-hidden select-none">
+    <div id="root">
+      <div id="initial-loader">
+        <div class="loader-logo-wrap">
+          <img src="/verlyn-logo.jpg" alt="Verlyn Tech" />
+        </div>
+        <div style="text-align: center;">
+          <div style="font-weight: 800; font-size: 15px; letter-spacing: 2px; color: #FFFFFF;">VERLYN TECH</div>
+          <div style="font-size: 11px; color: #06B6D4; letter-spacing: 1px; margin-top: 4px; font-family: monospace;">INITIALIZING 3D ENVIRONMENT...</div>
+        </div>
+        <div class="loader-bar-bg">
+          <div class="loader-bar-fill"></div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

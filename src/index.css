@@ -1,0 +1,113 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    background-color: #080C16;
+    color: #F8FAFC;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* Custom sleek scrollbar for modals */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(51, 65, 85, 0.8);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.9);
+}
+
+button, input, select, textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible, a:focus-visible {
+  outline: 2px solid #c6b184;
+  outline-offset: 3px;
+}
+
+.employee-panel .text-slate-400 { color: #b0bdc1; }
+.employee-panel .text-slate-500 { color: #9caaaf; }
+.employee-panel .text-cyan-400,
+.employee-panel .text-blue-400,
+.employee-panel .text-indigo-400 { color: #d1bc91; }
+.employee-panel .border-cyan-500,
+.employee-panel .border-blue-500,
+.employee-panel .border-indigo-500 { border-color: #c4ae7c; }
+.employee-panel input,
+.employee-panel textarea,
+.employee-panel pre { user-select: text; -webkit-user-select: text; }
+.touch-controls { display: none; }
+.office-touch-guide { display: none; }
+.office-action {
+  display: flex; align-items: center; gap: .65rem; padding: .7rem .9rem;
+  border: 1px solid #8b9c88; border-radius: .8rem;
+  background: rgba(27, 38, 33, .96); color: #f0eee5;
+  text-align: left; font-size: 13px; font-weight: 600;
+  box-shadow: 0 8px 28px #0004; transition: background-color .15s;
+}
+.office-action:hover { background: #304337; }
+.office-action:disabled { cursor: default; color: #bdc9bd; }
+.office-action kbd { display: grid; place-items: center; flex-shrink: 0; width: 26px; height: 26px; border-radius: 6px; background: #d4c296; color: #202923; font-size: 12px; }
+.office-action small { display: block; color: #b5c2b6; font-size: 10px; font-weight: 400; margin-top: 2px; }
+.office-action-secondary { border-color: #596561; background: rgba(26, 34, 35, .96); }
+.office-action-secondary kbd { background: #3a4746; color: #e2e9e4; }
+
+@media (pointer: coarse) {
+  .touch-controls { display: grid; }
+  .office-minimap { display: none; }
+  .office-proximity { bottom: 7.5rem; }
+  .office-key-guide { display: none; }
+  .office-touch-guide { display: block; }
+}
+
+@media (pointer: coarse) and (orientation: landscape) {
+  .office-proximity {
+    left: auto;
+    right: 1rem;
+    bottom: 1rem;
+    transform: none;
+    max-width: calc(100vw - 190px);
+    flex-direction: row;
+  }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .employee-panel { height: 96dvh; }
+  .employee-panel-header { padding: .45rem 1rem; }
+  .employee-panel-header > div:first-child > div:first-child { width: 2rem; height: 2rem; }
+  .employee-panel-header h2 { font-size: 1rem; }
+  .employee-panel-header p { font-size: 11px; }
+  .employee-panel-tabs > button { padding: .45rem .8rem; font-size: 12px; }
+  .employee-panel-body { padding: .4rem; }
+  .employee-chat-shell { min-height: 160px; }
+  .employee-chat-toolbar { padding: .35rem .6rem; }
+  .employee-chat-composer { padding: .4rem; }
+  .employee-chat-composer input, .employee-chat-composer > button { padding-top: .45rem; padding-bottom: .45rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
