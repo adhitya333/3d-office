@@ -1,6 +1,7 @@
 {
   "provider": "antigravity",
-  "model": "gemini-3.8-flash-medium",
+  "model": "gemini-3.8-flash-low",
+  "taskModel": "gemini-3.8-flash-medium",
   "employees": {
     "adhi": {
       "skill": ".agents/skills/adhi-web-engineering/SKILL.md",

@@ -4,20 +4,20 @@ import { StorageService } from './storage';
 import { npcBrain } from './npcBrain';
 import { readChatStream } from './chatStream';
 
-export interface EmployeeAIConfig { model: string; connected: boolean; }
+export interface EmployeeAIConfig { model: string; taskModel: string; connected: boolean; }
 
 export class EmployeeAIService {
-  private static connection = { configured: false, authenticated: false, requiresLogin: false, model: 'gemini-3.8-flash-medium', error: null as string | null };
+  private static connection = { configured: false, authenticated: false, requiresLogin: false, model: 'gemini-3.8-flash-low', taskModel: 'gemini-3.8-flash-medium', error: null as string | null };
   private static checking: Promise<typeof EmployeeAIService.connection> | null = null;
   private static checkedAt = 0;
 
   public static isConfigured(): boolean { return this.connection.configured && this.connection.authenticated; }
   public static getModel(): string { return this.connection.model; }
-  public static getConfig(): EmployeeAIConfig { return { model: this.getModel(), connected: this.isConfigured() }; }
+  public static getConfig(): EmployeeAIConfig { return { model: this.getModel(), taskModel: this.connection.taskModel, connected: this.isConfigured() }; }
   public static async refreshConnection(force = false) {
-    // Remove credentials retained by older versions. Provider keys belong only on the server.
-    try { localStorage.removeItem('VERLYN_OPENROUTER_API_KEY'); } catch { /* Storage may be disabled. */ }
-    if (!force && Date.now() - this.checkedAt < 5000) return this.connection;
+    // Purge legacy browser credentials; this app now uses the official CLI sign-in only.
+    try { for (const key of Object.keys(localStorage)) if (/^VERLYN_.*API_KEY$/i.test(key)) localStorage.removeItem(key); } catch { /* Storage may be disabled. */ }
+    if (!force && Date.now() - this.checkedAt < (this.isConfigured() ? 60_000 : 5000)) return this.connection;
     if (this.checking) return this.checking;
     this.checking = (async () => {
       try {
@@ -25,7 +25,7 @@ export class EmployeeAIService {
         if (!response.ok) throw new Error('Backend unavailable');
         const status = await response.json();
         this.connection = { configured: status.configured === true, authenticated: status.authenticated === true,
-          requiresLogin: status.requiresLogin === true, model: String(status.model || this.connection.model), error: typeof status.error === 'string' ? status.error : null };
+          requiresLogin: status.requiresLogin === true, model: String(status.model || this.connection.model), taskModel: String(status.taskModel || this.connection.taskModel), error: typeof status.error === 'string' ? status.error : null };
       } catch { this.connection = { ...this.connection, configured: false, authenticated: false }; }
       this.checkedAt = Date.now();
       window.dispatchEvent(new Event('office-ai-connection'));
@@ -210,7 +210,7 @@ Provide JSON-LD entity graph schemas, Perplexity citation share strategies, sema
       case 'vaibav':
         return `${base}
 SPECIALTY: AUTONOMOUS AI AGENTS & WORKFLOW ORCHESTRATION.
-Provide multi-agent orchestration designs, Gemini 2.0 / Antigravity function calling pipelines, webhook ingestion architectures, and self-healing task retry queues.`;
+Provide AI orchestration designs, Gemini / Antigravity workflows, webhook ingestion architectures, and reliable task retry queues.`;
 
       case 'taha':
         return `${base}
@@ -233,6 +233,30 @@ Provide executive vision, capital deployment strategies, cross-department alignm
     }
   }
 
+  private static getChatPrompt(employee: EmployeeDefinition, conversation: { content: string }[], activeTasks: EmployeeTask[]) {
+    const latest = conversation[conversation.length - 1]?.content || '';
+    const tasks = activeTasks.filter(task => task.status !== 'completed').slice(0, 8);
+    return `You are ${employee.name}, ${employee.title} in ${employee.departmentName} at Verlyn HQ.
+Role: ${employee.roleDescription}
+Current assignments: ${tasks.map(task => `${task.title} [${task.status}, ${task.priority}]`).join('; ') || 'None queued'}.
+${this.getLiveLocationContext(employee.id)}
+${this.getProjectFolderContext(employee.id)}
+${/\b(team|colleague|collaborat\w*|friend\w*|adhi|abbu|prox|vaibav|taha|rewu|ameen)\b/i.test(latest) ? this.getTeamFriendshipContext(employee) : ''}
+Answer directly, warmly and concretely. Usually use 1–4 sentences, under 120 words; provide more detail or code when requested. Do not plan or use tools for small talk, advice or a status question. Report actual supplied status; describe suggested checks as suggestions, never as completed work. Do not invent access, test results or progress.`;
+  }
+
+  /** Keep the current request intact and bound older context; full chats stay saved locally. */
+  private static recentConversation(conversation: { role: 'user' | 'assistant'; content: string }[]) {
+    const recent: typeof conversation = [];
+    let size = 0;
+    for (let i = conversation.length - 1; i >= 0 && recent.length < 16; i--) {
+      const message = conversation[i];
+      if (recent.length && size + message.content.length > 24_000) break;
+      recent.unshift(message); size += message.content.length;
+    }
+    return recent;
+  }
+
   /**
    * Generates a task deliverable through the signed-in Antigravity client
    */
@@ -242,6 +266,7 @@ Provide executive vision, capital deployment strategies, cross-department alignm
     onProgress?: (status: string) => void
   ): Promise<TaskDeliverable> {
     const config = await this.getReadyConfig();
+    const model = config.taskModel;
 
     // Determine deliverable type
     let deliverableType: TaskDeliverable['type'] = 'document';
@@ -255,7 +280,7 @@ Provide executive vision, capital deployment strategies, cross-department alignm
 
 
 
-    onProgress?.(`Connecting to Antigravity (${config.model})...`);
+    onProgress?.(`Connecting to Antigravity (${model})...`);
 
     const systemPrompt = this.getSystemPromptForEmployee(employee);
 
@@ -285,7 +310,7 @@ Execute this assignment and generate the complete deliverable now.`;
       },
       body: JSON.stringify({
         employeeId: employee.id,
-        model: config.model,
+        purpose: 'task',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
@@ -316,7 +341,7 @@ Execute this assignment and generate the complete deliverable now.`;
       createdAt: new Date().toISOString(),
       version: 1,
       metadata: {
-        modelUsed: config.model,
+        modelUsed: data.model || model,
         generatedBy: employee.name,
         tokensUsed: data?.usage?.total_tokens
       }
@@ -328,7 +353,7 @@ Execute this assignment and generate the complete deliverable now.`;
       ...task,
       status: 'completed',
       updatedAt: new Date().toISOString(),
-      notes: `Executed successfully by ${employee.name} via ${config.model}.`
+      notes: `Executed successfully by ${employee.name} via ${data.model || model}.`
     };
     StorageService.saveTask(updatedTask);
 
@@ -337,7 +362,7 @@ Execute this assignment and generate the complete deliverable now.`;
       employeeId: employee.id,
       timestamp: new Date().toISOString(),
       type: 'deliverable_submitted',
-      message: `${employee.name} generated deliverable for "${task.title}" using ${config.model}.`,
+      message: `${employee.name} generated deliverable for "${task.title}" using ${data.model || model}.`,
       user: 'AI Worker'
     });
 
@@ -362,24 +387,7 @@ Execute this assignment and generate the complete deliverable now.`;
       return `Understood! I'm heading back to my desk right away to continue our procurement objectives. See you there!`;
     }
 
-    const taskContext = activeTasks.length > 0
-      ? `\nCURRENT ASSIGNMENTS ON YOUR DESK:\n${activeTasks.map(t => `- [${t.status.toUpperCase()}] "${t.title}" (Priority: ${t.priority})`).join('\n')}`
-      : '\nYou currently have no active assignments queued.';
-
-    const systemPrompt = `You are ${employee.name}, ${employee.title} in the ${employee.departmentName} at Verlyn Procurement HQ.
-Your role: ${employee.roleDescription}
-${taskContext}
-${this.getTeamFriendshipContext(employee)}
-${this.getLiveLocationContext(employee.id)}
-${this.getProjectFolderContext(employee.id)}
-
-CONVERSATIONAL GUIDELINES:
-1. Respond naturally in first person ("I", "my") as ${employee.name}.
-2. Be crisp, insightful, and knowledgeable in your technical domain.
-3. If the user asks for a status update, report on your active workload or explain what you are doing right now.
-4. If the user describes a task or project, confirm your understanding, give 1-2 rapid recommendations, and let them know you are ready to execute it.
-5. If the user mentions other employees or asks about the team, speak warmly of them as close friends and great colleagues.
-6. Keep chat messages punchy (under 120 words unless they ask for deep technical specs).`;
+    const systemPrompt = this.getChatPrompt(employee, conversation, activeTasks);
 
     const response = await fetch('/api/ai/chat', {
       method: 'POST',
@@ -391,7 +399,7 @@ CONVERSATIONAL GUIDELINES:
         model: config.model,
         messages: [
           { role: 'system', content: systemPrompt },
-          ...conversation.map(c => ({ role: c.role, content: c.content }))
+          ...this.recentConversation(conversation)
         ],
         temperature: 0.6,
         max_tokens: 600
@@ -408,7 +416,7 @@ CONVERSATIONAL GUIDELINES:
   }
 
   /**
-   * High-Performance Real-Time Token Streaming with SSE for dialogue without lag.
+   * Forward visible Antigravity answer deltas as they arrive.
    */
   public static async streamChatWithEmployee(
     employee: EmployeeDefinition,
@@ -431,24 +439,7 @@ CONVERSATIONAL GUIDELINES:
       return ack;
     }
 
-    const taskContext = activeTasks.length > 0
-      ? `\nCURRENT ASSIGNMENTS ON YOUR DESK:\n${activeTasks.map(t => `- [${t.status.toUpperCase()}] "${t.title}" (Priority: ${t.priority})`).join('\n')}`
-      : '\nYou currently have no active assignments queued.';
-
-    const systemPrompt = `You are ${employee.name}, ${employee.title} in the ${employee.departmentName} at Verlyn Procurement HQ.
-Your role: ${employee.roleDescription}
-${taskContext}
-${this.getTeamFriendshipContext(employee)}
-${this.getLiveLocationContext(employee.id)}
-${this.getProjectFolderContext(employee.id)}
-
-CONVERSATIONAL GUIDELINES:
-1. Respond naturally in first person ("I", "my") as ${employee.name}.
-2. Be crisp, insightful, and knowledgeable in your technical domain.
-3. If the user asks for a status update, report on your active workload or explain what you are doing right now.
-4. If the user describes a task or project, confirm your understanding, give 1-2 rapid recommendations, and let them know you are ready to execute it.
-5. If the user mentions other employees or asks about the team, speak warmly of them as close friends and great colleagues.
-6. Keep chat messages punchy (under 120 words unless they ask for deep technical specs).`;
+    const systemPrompt = this.getChatPrompt(employee, conversation, activeTasks);
 
     const response = await fetch('/api/ai/chat', {
       method: 'POST',
@@ -462,7 +453,7 @@ CONVERSATIONAL GUIDELINES:
         stream: true,
         messages: [
           { role: 'system', content: systemPrompt },
-          ...conversation.map(c => ({ role: c.role, content: c.content }))
+          ...this.recentConversation(conversation)
         ],
         temperature: 0.6,
         max_tokens: 600

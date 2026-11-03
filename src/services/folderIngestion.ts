@@ -116,7 +116,6 @@ export class FolderIngestionService {
       snippet.includes('langgraph') ||
       snippet.includes('langchain') ||
       snippet.includes('gemini-2.0') ||
-      snippet.includes('openrouter') ||
       snippet.includes('function_calling') ||
       snippet.includes('system_prompt')
     ) {

@@ -108,8 +108,8 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
 
   // Antigravity connection
   const [isConfigured, setIsConfigured] = useState<boolean>(EmployeeAIService.isConfigured());
-  const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
-  const [tempApiKey, setTempApiKey] = useState<string>('');
+  const [showConnectionModal, setShowConnectionModal] = useState<boolean>(false);
+  const [officePassword, setOfficePassword] = useState<string>('');
   const [checkingConnection, setCheckingConnection] = useState(false);
   const [canteenNotice, setCanteenNotice] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -227,8 +227,8 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
           setPreviewDeliverable(null);
           return;
         }
-        if (showApiKeyModal) {
-          setShowApiKeyModal(false);
+        if (showConnectionModal) {
+          setShowConnectionModal(false);
           return;
         }
         onClose();
@@ -237,7 +237,7 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose, previewDeliverable, showApiKeyModal]);
+  }, [onClose, previewDeliverable, showConnectionModal]);
 
   const currentProject = projects.find(p => p.id === selectedProjectId) || projects.find(p => p.id === activeProjectId) || projects[0];
   const isCEO = employee.id === 'ameen';
@@ -332,7 +332,7 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
   // CONVERT RECENT CHAT INTO AN ACTIVE TASK AND START EXECUTION
   const handleConvertChatToTaskAndRun = async () => {
     if (!EmployeeAIService.isConfigured()) {
-      setShowApiKeyModal(true);
+      setShowConnectionModal(true);
       return;
     }
 
@@ -469,13 +469,13 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const handleSaveRuntimeKey = async (e: React.FormEvent) => {
+  const handleOfficeLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await EmployeeAIService.connect(tempApiKey);
+      await EmployeeAIService.connect(officePassword);
       setIsConfigured(EmployeeAIService.isConfigured());
-      setShowApiKeyModal(false);
-      setTempApiKey('');
+      setShowConnectionModal(false);
+      setOfficePassword('');
       SoundEffects.playSuccess();
     } catch (error) {
       setConnectionError(error instanceof Error ? error.message : 'Could not connect.');
@@ -517,7 +517,7 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
                 {/* Connection Status Badge */}
                 {isConfigured ? (
                   <button
-                    onClick={() => setShowApiKeyModal(true)}
+                    onClick={() => setShowConnectionModal(true)}
                     className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-full text-[11px] font-medium text-[#a9c6b0] border border-[#42594d] hover:bg-[#273a31]"
                     title={`Antigravity · ${configuredModel}. Open connection settings`}
                   >
@@ -526,7 +526,7 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
                   </button>
                 ) : (
                   <button
-                    onClick={() => setShowApiKeyModal(true)}
+                    onClick={() => setShowConnectionModal(true)}
                     className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-full text-[11px] font-medium text-[#d2b984] border border-[#66583d] hover:bg-[#3a3224]"
                     title="Connect AI"
                   >
@@ -541,7 +541,7 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setShowApiKeyModal(true)}
+              onClick={() => setShowConnectionModal(true)}
               className="p-2 rounded-lg text-[#aeb9bd] hover:text-white hover:bg-[#2c363b] transition-colors"
               title="Connection settings"
             >
@@ -883,11 +883,11 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
         </div>
       )}
 
-      {/* API KEY CONFIGURATION MODAL */}
-      {showApiKeyModal && (
+      {/* ANTIGRAVITY CONNECTION SETTINGS */}
+      {showConnectionModal && (
         <div
           className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
-          onClick={() => setShowApiKeyModal(false)}
+          onClick={() => setShowConnectionModal(false)}
         >
           <div
             className="max-h-[92dvh] overflow-y-auto bg-[#0F172A] border border-slate-700 max-w-lg w-full rounded-2xl p-6 shadow-2xl space-y-4"
@@ -904,7 +904,7 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
                 </div>
               </div>
               <button
-                onClick={() => setShowApiKeyModal(false)}
+                onClick={() => setShowConnectionModal(false)}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
               >
                 <X className="w-5 h-5" />
@@ -934,7 +934,7 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
 
               <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 text-xs text-slate-300 space-y-2">
                 <p className="font-semibold text-white">Private backend connection</p>
-                <p>Employees use the official Antigravity CLI on this computer with Gemini 3.8 Flash (Medium). Each request loads that employee’s SKILL.md.</p>
+                <p>All employees use the official Antigravity CLI and their own SKILL.md. Quick chat uses Gemini 3.8 Flash with low reasoning; full tasks keep medium reasoning.</p>
                 <p>Google sign-in stays in Antigravity’s official client and private credential storage. This website never asks for your Google password.</p>
                 <div className="flex flex-wrap gap-2 pt-2">
                   <button type="button" disabled={checkingConnection} onClick={async () => { setCheckingConnection(true); setConnectionError(null); try { const result = await EmployeeAIService.signInAntigravity(); if (result.alreadyConnected) { setIsConfigured(true); setConnectionError(null); } else setConnectionError('Complete sign-in in the official Antigravity window, then click Check connection.'); } catch(error) { setConnectionError(error instanceof Error ? error.message : 'Could not open Antigravity.'); } finally { setCheckingConnection(false); } }} className="rounded-lg border border-[#566850] px-3 py-2 text-[#cddbc8] disabled:opacity-50">Open Antigravity sign-in</button>
@@ -944,11 +944,11 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
               </div>
               <div className="space-y-2 pt-1">
                 {connectionError && <p role="alert" className="text-rose-300">{connectionError}</p>}
-                <form onSubmit={handleSaveRuntimeKey} className="space-y-3">
+                <form onSubmit={handleOfficeLogin} className="space-y-3">
                   <input
                     type="password"
-                    value={tempApiKey}
-                    onChange={e => setTempApiKey(e.target.value)}
+                    value={officePassword}
+                    onChange={e => setOfficePassword(e.target.value)}
                     placeholder="Office access password" aria-label="Office access password" autoComplete="current-password"
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 font-mono"
                   />
@@ -969,14 +969,14 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
                     <div className="flex items-center gap-2 ml-auto">
                       <button
                         type="button"
-                        onClick={() => setShowApiKeyModal(false)}
+                        onClick={() => setShowConnectionModal(false)}
                         className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 font-medium"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
-                        disabled={!tempApiKey.trim()}
+                        disabled={!officePassword.trim()}
                         className="px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-xs text-white font-semibold shadow"
                       >
                         Connect securely

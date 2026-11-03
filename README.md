@@ -1,6 +1,6 @@
 # Verlyn HQ — Interactive 3D Office
 
-A walkable office with seven Antigravity employees, built with React, TypeScript, Three.js, Vite and a Node backend. Every employee uses **Gemini 3.8 Flash (Medium)**, model ID `gemini-3.8-flash-medium`. There is no automatic fallback to another model or provider.
+A walkable office with seven Antigravity employees, built with React, TypeScript, Three.js, Vite and a Node backend. All seven use **Gemini 3.8 Flash**: quick chat uses `gemini-3.8-flash-low` with low reasoning; **Run as task** uses `gemini-3.8-flash-medium` with medium reasoning for full deliverables. Both choices are fixed on the backend, with no automatic fallback to another model or provider.
 
 ## Start the office
 
@@ -8,7 +8,7 @@ Requires Node.js 22.13+, npm and the official Antigravity CLI on the computer ru
 
 1. Run `npm ci`.
 2. Copy `.env.example` to `.env` (PowerShell: `Copy-Item .env.example .env`).
-3. Launch `agy` and complete its official Google sign-in. Run `agy models` to confirm access to `gemini-3.8-flash-medium`.
+3. Launch `agy` and complete its official Google sign-in. Run `agy models` to confirm access to both `gemini-3.8-flash-low` and `gemini-3.8-flash-medium`.
 4. Run `npm run dev` and open http://127.0.0.1:3000.
 5. Open an employee panel → **Connection settings** → **Check connection**. **Open Antigravity sign-in** opens the official interactive client on a local Windows host if sign-in is needed.
 
@@ -65,7 +65,11 @@ Keyboard controls stay at the top. Touch users have a movement pad, swipe camera
 
 Each employee keeps independent thinking, responding and task progress. Closing their panel does not abort an active request; a background indicator reopens their progress. Replies, deliverables, drafts, tabs and scroll positions persist locally. Reloading the app or closing the browser interrupts in-flight client requests and unfinished replies are marked interrupted on return. This is not a durable server job queue or cross-device storage system.
 
-At most two Antigravity requests run concurrently to limit host resource usage; additional requests wait. The selected graphics tier stays saved and never changes automatically. Static geometry batching, shared food materials, cached shadows and static monitor textures reduce rendering work. FPS still depends on device, resolution and scene load.
+Antigravity runs two or three requests concurrently, depending on host CPU capacity; additional requests wait. Normal chats use lower reasoning, concise prompts and bounded recent conversation context (up to 16 messages / 24,000 characters, always retaining the current request intact). Complete chat history stays saved locally. Role files/workspaces and successful connection checks are cached to avoid repeated setup; **Check connection** forces a fresh sign-in/model check. Restart the backend after editing role skills.
+
+Visible answer deltas stream from the CLI to the browser as soon as they arrive; the backend no longer waits for the complete answer before displaying text. Reasoning and private diagnostics are never streamed. CLI startup, provider load and account limits still affect response time.
+
+The selected graphics tier stays saved and never changes automatically. Static geometry batching, shared food materials, cached shadows and static monitor textures reduce rendering work. FPS still depends on device, resolution and scene load.
 
 ## Shared access and private data
 
@@ -82,6 +86,6 @@ Visitors unlock the office with its separate access password; this does not sign
 
 Run `npm test`, `npm run build`, and `npm run verify:secrets`.
 
-Checks cover 35 seats, supported feet and cushion heights, CEO desk/dining-table clearance, monitors, saved quality, coffee queues, simultaneous food collection, queued invitations during thinking, complete collect → sit → finish → return trips, table blocking, each employee's routes, independent background work and failure recovery. Backend tests use a fake CLI: they check official protocol framing, authentication, private credentials, per-role skills/workspaces, fixed model selection and bounded concurrency without spending quota.
+Checks cover 35 seats, supported feet and cushion heights, CEO desk/dining-table clearance, monitors, saved quality, coffee queues, simultaneous food collection, queued invitations during thinking, complete collect → sit → finish → return trips, table blocking, each employee's routes, independent background work and failure recovery. Backend tests use a fake CLI: they check official protocol framing, authentication, private credentials, per-role skills/workspaces, fixed chat/task model selection, bounded concurrency, answer text arriving before completion, and sanitized stream failures without spending quota.
 
 The seven skills also pass the Skill Creator frontmatter validator. Geometry and responsive layout checks do not replace testing on every physical device.

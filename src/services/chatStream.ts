@@ -10,6 +10,7 @@ export async function readChatStream(body: ReadableStream<Uint8Array>, onChunk: 
     let data;
     try { data = JSON.parse(trimmed.slice(5).trim()); } catch { return; }
     if (data.error) throw new Error('The AI provider interrupted the reply. Please retry.');
+    if (typeof data.final === 'string') { text = data.final; onChunk(text, ''); return; }
     const delta = data.choices?.[0]?.delta?.content;
     if (typeof delta === 'string' && delta) { text += delta; onChunk(text, delta); }
   };

@@ -1,5 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { createAntigravityBridge, ANTIGRAVITY_MODEL, EMPLOYEE_IDS } from './antigravity.mjs';
+import { createAntigravityBridge, ANTIGRAVITY_MODEL, ANTIGRAVITY_TASK_MODEL, EMPLOYEE_IDS } from './antigravity.mjs';
 
 const json = (res, status, data) => {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
@@ -84,7 +84,7 @@ export function createApiHandler({ env = process.env, bridge = createAntigravity
         json(res, 429, { error: { message: 'The office is busy. Please try again shortly.' } }); return true;
       }
       const body = await readBody(req);
-      if (!EMPLOYEE_IDS.includes(body.employeeId) || !Array.isArray(body.messages) || !body.messages.length || body.messages.length > 64 || body.messages.some(message =>
+      if ((body.purpose !== undefined && !['chat', 'task'].includes(body.purpose)) || !EMPLOYEE_IDS.includes(body.employeeId) || !Array.isArray(body.messages) || !body.messages.length || body.messages.length > 64 || body.messages.some(message =>
         !message || !['system', 'user', 'assistant'].includes(message.role) || typeof message.content !== 'string' || message.content.length > 64_000)) {
         json(res, 400, { error: { message: 'Invalid conversation.' } }); return true;
       }
@@ -95,11 +95,27 @@ export function createApiHandler({ env = process.env, bridge = createAntigravity
       res.on('close', onClose);
       activeTotal++; active.set(client, (active.get(client) || 0) + 1);
       try {
-        const reply = await bridge.complete({ employeeId: body.employeeId, messages: body.messages, signal: controller.signal });
-        if (body.stream === true) {
+        const streaming = body.stream === true;
+        const replyModel = body.purpose === 'task' ? ANTIGRAVITY_TASK_MODEL : model;
+        let streamed = '';
+        const send = data => { if (!res.destroyed) res.write('data: ' + JSON.stringify(data) + '\n\n'); };
+        if (streaming) {
           res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' });
-          res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: reply.content } }], model }) + '\n\ndata: [DONE]\n\n');
-        } else json(res, 200, { model, choices: [{ message: { content: reply.content } }], usage: reply.usage });
+          res.flushHeaders();
+        }
+        const heartbeat = streaming ? setInterval(() => { if (!res.destroyed) res.write(': waiting\n\n'); }, 10_000) : null;
+        try {
+          const reply = await bridge.complete({ employeeId: body.employeeId, messages: body.messages, purpose: body.purpose || 'chat', signal: controller.signal,
+            onDelta: streaming ? delta => { streamed += delta; send({ choices: [{ delta: { content: delta } }], model: replyModel }); } : undefined });
+          if (streaming) {
+            if (!streamed) send({ choices: [{ delta: { content: reply.content } }], model: replyModel });
+            else if (streamed !== reply.content) send({ final: reply.content, model: replyModel });
+            res.end('data: [DONE]\n\n');
+          } else json(res, 200, { model: replyModel, choices: [{ message: { content: reply.content } }], usage: reply.usage });
+        } catch (error) {
+          if (streaming && !res.destroyed) { send({ error: { message: 'Antigravity interrupted the reply. Please retry.' } }); res.end(); }
+          else throw error;
+        } finally { if (heartbeat) clearInterval(heartbeat); }
 
       } finally {
         clearTimeout(timeout); res.off('close', onClose);

@@ -2,14 +2,32 @@ import { spawn } from 'node:child_process';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { availableParallelism } from 'node:os';
 
-export const ANTIGRAVITY_MODEL = 'gemini-3.8-flash-medium';
+export const ANTIGRAVITY_MODEL = 'gemini-3.8-flash-low';
+export const ANTIGRAVITY_TASK_MODEL = 'gemini-3.8-flash-medium';
+export const ANTIGRAVITY_CONCURRENCY = Math.min(3, Math.max(2, Math.floor(availableParallelism() / 2)));
 export const EMPLOYEE_IDS = ['adhi', 'abbu', 'prox', 'rewaant', 'taha', 'vaibav', 'ameen'];
 const projectRoot = fileURLToPath(new URL('../', import.meta.url));
 export const cliEnvironment = env => Object.fromEntries(Object.entries(env).filter(([key]) => !/(?:API_KEY|ACCESS_TOKEN|SECRET|PASSWORD)$/i.test(key)));
 
 /** No shell interpolation and no provider credentials in command arguments or prompts. */
-export function runAntigravity(args, { cwd, input = '', signal, env = process.env, timeoutMs = 120_000 } = {}) {
+export function createEventDecoder(onEvent) {
+  let buffer = '';
+  return chunk => {
+    buffer += chunk;
+    let newline;
+    while ((newline = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, newline).trim(); buffer = buffer.slice(newline + 1);
+      if (!line) continue;
+      let event;
+      try { event = JSON.parse(line); } catch { continue; }
+      onEvent?.(event);
+    }
+  };
+}
+
+export function runAntigravity(args, { cwd, input = '', signal, env = process.env, timeoutMs = 120_000, onEvent } = {}) {
   return new Promise((resolve, reject) => {
     const childEnv = cliEnvironment(env);
     const child = spawn(env.ANTIGRAVITY_BIN || 'agy', args, { cwd, env: childEnv, windowsHide: true, shell: false, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -23,7 +41,8 @@ export function runAntigravity(args, { cwd, input = '', signal, env = process.en
       clearTimeout(timeout); signal?.removeEventListener('abort', stop);
       error ? reject(error) : resolve(value);
     };
-    child.stdout.on('data', chunk => { stdout += chunk; if (stdout.length > 2_000_000) stop(); });
+    const decode = createEventDecoder(onEvent);
+    child.stdout.on('data', chunk => { stdout += chunk; decode(chunk); if (stdout.length > 2_000_000) stop(); });
     child.stderr.on('data', chunk => { stderr = (stderr + chunk).slice(-32_000); });
     child.stdin.on('error', () => {});
     child.on('error', error => finish(new Error(error.code === 'ENOENT' ? 'Antigravity CLI is not installed on the server.' : 'Could not start Antigravity.')));
@@ -36,29 +55,31 @@ export function runAntigravity(args, { cwd, input = '', signal, env = process.en
   });
 }
 
-export function createAntigravityBridge({ env = process.env, runner = runAntigravity, root = projectRoot } = {}) {
-  let lastStatus = { provider: 'Antigravity', model: ANTIGRAVITY_MODEL, configured: false, signedIn: false, error: 'Check the Antigravity connection.' };
+export function createAntigravityBridge({ env = process.env, runner = runAntigravity, root = projectRoot, concurrency = ANTIGRAVITY_CONCURRENCY } = {}) {
+  let lastStatus = { provider: 'Antigravity', model: ANTIGRAVITY_MODEL, taskModel: ANTIGRAVITY_TASK_MODEL, configured: false, signedIn: false, error: 'Check the Antigravity connection.' };
   let checkedAt = 0, checking;
   const manifest = readFile(path.join(root, 'agents/manifest.json'), 'utf8').then(JSON.parse);
   const dataRoot = path.join(root, '.office-data', 'agents');
+  const prepared = new Map();
   let running = 0;
   const waiting = [];
   const acquire = signal => new Promise((resolve, reject) => {
     const item = { start: () => { signal?.removeEventListener('abort', cancel); running++; resolve(() => { running--; waiting.shift()?.start(); }); } };
     const cancel = () => { const index = waiting.indexOf(item); if (index >= 0) waiting.splice(index, 1); reject(Object.assign(new Error('Request cancelled.'), { name: 'AbortError' })); };
     if (signal?.aborted) return cancel();
-    if (running < 2) item.start(); else { waiting.push(item); signal?.addEventListener('abort', cancel, { once: true }); }
+    if (running < concurrency) item.start(); else { waiting.push(item); signal?.addEventListener('abort', cancel, { once: true }); }
   });
   const status = async (force = false) => {
-    if (!force && Date.now() - checkedAt < 60_000) return lastStatus;
+    if (!force && Date.now() - checkedAt < (lastStatus.configured ? 300_000 : 15_000)) return lastStatus;
     if (checking) return checking;
     checking = (async () => {
       try {
         const cwd = path.join(dataRoot, '_connection'); await mkdir(cwd, { recursive: true });
         const result = await runner(['--log-file', path.join(cwd, 'cli.log'), 'models'], { cwd, env, timeoutMs: 20_000 });
         const signedIn = result.code === 0;
-        const available = result.stdout.split(/\r?\n/).some(line => line.trim().split(/\s+/)[0] === ANTIGRAVITY_MODEL);
-        lastStatus = { provider: 'Antigravity', model: ANTIGRAVITY_MODEL, signedIn, configured: signedIn && available,
+        const models = result.stdout.split(/\r?\n/).map(line => line.trim().split(/\s+/)[0]);
+        const available = [ANTIGRAVITY_MODEL, ANTIGRAVITY_TASK_MODEL].every(model => models.includes(model));
+        lastStatus = { provider: 'Antigravity', model: ANTIGRAVITY_MODEL, taskModel: ANTIGRAVITY_TASK_MODEL, signedIn, configured: signedIn && available,
           error: !signedIn ? 'Sign in in the official Antigravity client on this computer, then check again.' : !available ? 'Gemini 3.8 Flash is not available to this Antigravity account.' : null };
       } catch (error) { lastStatus = { ...lastStatus, configured: false, signedIn: false, error: error.message }; }
       checkedAt = Date.now(); return lastStatus;
@@ -67,21 +88,33 @@ export function createAntigravityBridge({ env = process.env, runner = runAntigra
   };
   return {
     status,
-    async complete({ employeeId, messages, signal }) {
+    async complete({ employeeId, messages, signal, purpose = 'chat', onDelta }) {
       const config = await manifest;
       if (!Object.hasOwn(config.employees, employeeId)) throw new Error('Choose a valid employee.');
       const connection = await status();
       if (!connection.configured) throw new Error(connection.error);
       const release = await acquire(signal);
       try {
-      const skill = await readFile(path.join(root, config.employees[employeeId].skill), 'utf8');
-      const cwd = path.join(dataRoot, employeeId); await mkdir(cwd, { recursive: true });
-      // Each employee gets an independent workspace and role. OAuth stays in the CLI keyring.
-      await writeFile(path.join(cwd, 'AGENTS.md'), `${skill}\n\nThe office supplies conversation and project excerpts in the request. Return a text deliverable. Do not browse local credentials or unrelated files. Do not send messages, publish, deploy, or modify external systems.\n`);
-      const prompt = `${skill}\n\nOFFICE CONVERSATION\n${messages.map(message => `${message.role.toUpperCase()}:\n${message.content}`).join('\n\n')}\n\nRespond as ${config.employees[employeeId].name}. Return the requested answer or deliverable directly. Do not use tools unless essential to the user's explicit task.`;
+      if (!prepared.has(employeeId)) prepared.set(employeeId, (async () => {
+        const skill = await readFile(path.join(root, config.employees[employeeId].skill), 'utf8');
+        const cwd = path.join(dataRoot, employeeId); await mkdir(cwd, { recursive: true });
+        // Independent role workspaces; OAuth stays in the official CLI keyring.
+        await writeFile(path.join(cwd, 'AGENTS.md'), `${skill}\n\nThe office supplies conversation and project excerpts in the request. Return a text deliverable. Do not browse local credentials or unrelated files. Do not send messages, publish, deploy, or modify external systems.\n`);
+        return { skill, cwd };
+      })().catch(error => { prepared.delete(employeeId); throw error; }));
+      const { skill, cwd } = await prepared.get(employeeId);
+      const model = purpose === 'task' ? ANTIGRAVITY_TASK_MODEL : ANTIGRAVITY_MODEL;
+      const instruction = purpose === 'task' ? 'Produce the complete requested deliverable with appropriate detail.' : 'Answer directly and concisely, usually in 1–4 sentences. Expand when the user explicitly requests detail or code. Do not create a plan before answering a simple question.';
+      const prompt = `${skill}\n\nOFFICE CONVERSATION\n${messages.map(message => `${message.role.toUpperCase()}:\n${message.content}`).join('\n\n')}\n\nRespond as ${config.employees[employeeId].name}. ${instruction} Do not use tools unless essential to the user's explicit task. Describe suggested checks as suggestions; never claim that you performed a check or external action without tool evidence.`;
       const input = JSON.stringify({ event: 'user', message: { content: prompt } }) + '\n';
       const result = await runner(['--log-file', path.join(cwd, 'cli.log'), '--input-format', 'stream-json', '--output-format', 'stream-json', '--mode', 'plan', '--sandbox',
-        '--disable-slash-commands', '--model', ANTIGRAVITY_MODEL, '--print-timeout', '110s'], { cwd, env, input, signal });
+        '--disable-slash-commands', '--model', model, '--effort', purpose === 'task' ? 'medium' : 'low', '--print-timeout', '110s'], {
+          cwd, env, input, signal, onEvent: event => {
+            const step = event.step_update;
+            // Only visible answer text, never reasoning, diagnostics, or tool output.
+            if (event.event === 'step_update' && step?.step_type === 'agent_response' && typeof step.text_delta === 'string') onDelta?.(step.text_delta);
+          }
+        });
       if (result.code !== 0) { checkedAt = 0; throw new Error('Antigravity could not finish the request. Check your sign-in, quota and model access.'); }
       let response;
       try {
@@ -96,7 +129,7 @@ export function createAntigravityBridge({ env = process.env, runner = runAntigra
         if (responseStatus && responseStatus !== 'complete') throw new Error('Antigravity did not complete the response.');
       }
       if (typeof response.response !== 'string' || !response.response.trim()) throw new Error('Antigravity returned an empty response.');
-      return { content: response.response.trim(), model: ANTIGRAVITY_MODEL, usage: response.usage };
+      return { content: response.response.trim(), model, usage: response.usage };
       } finally { release(); }
     },
     async signIn() {

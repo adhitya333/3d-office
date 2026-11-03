@@ -138,6 +138,8 @@ async function testBackgroundWork() {
   const encoded = new TextEncoder().encode('data: {"choices":[{"delta":{"content":"Hi ☕"}}]}\r\n\r\ndata: {"choices":[{"delta":{"content":" there"}}]}');
   const body = new ReadableStream({ start(controller) { for (let i = 0; i < encoded.length; i += 7) controller.enqueue(encoded.slice(i, i + 7)); controller.close(); } });
   assert.equal(await readChatStream(body, () => {}), 'Hi ☕ there', 'UTF-8 chunks and final SSE line must survive network boundaries');
+  const finalBody = new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode('data: {"choices":[{"delta":{"content":"Partial"}}]}\n\ndata: {"final":"Complete reply"}\n\ndata: [DONE]\n\n')); controller.close(); } });
+  assert.equal(await readChatStream(finalBody, () => {}), 'Complete reply', 'The final CLI result reconciles any missed answer delta');
   await assert.rejects(readChatStream(new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode('data: {"error":{"message":"private diagnostics"}}\n')); controller.close(); } }), () => {}), /interrupted/);
   const messages = new Map(); const pending = new Map();
   const storage = { getChatMessages: id => [...(messages.get(id) || [])], getTasksForEmployee: () => [], saveChatMessage(message) {

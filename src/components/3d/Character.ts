@@ -911,7 +911,7 @@ export class CharacterFactory {
 
     bCtx.fillStyle = '#000000';
     bCtx.font = '900 48px monospace';
-    bCtx.fillText('● OPENROUTER AI CONNECTED', 150, 624);
+    bCtx.fillText('● ANTIGRAVITY TEAM', 150, 624);
 
     // Interactive Action Block
     bCtx.fillStyle = 'rgba(255, 255, 255, 0.12)';

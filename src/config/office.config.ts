@@ -355,9 +355,9 @@ export const OFFICE_CONFIG: OfficeConfig = {
       departmentId: 'ai-systems',
       departmentName: 'AI & Business Systems Lab',
       roomName: 'AI & Business Systems Lab',
-      roleDescription: 'Multi-agent systems, Gemini/OpenRouter LLM orchestration, webhook triggers, prospect enrichment, agentic automation pipelines, and LangGraph meshes.',
+      roleDescription: 'AI agent systems, Antigravity and Gemini orchestration, webhook triggers, CRM automation pipelines, and workflow reliability.',
       responsibilities: [
-        'Building autonomous multi-agent meshes with Gemini 2.0 Flash/Pro and OpenRouter LLMs',
+        'Building reliable AI agent workflows with Antigravity and Gemini',
         'Engineering webhook ingestion pipelines that qualify and enrich inbound leads in real-time',
         'Implementing self-healing background automation tasks and failover retry monitors',
         'Connecting agent outputs directly into Taha’s CRM pipelines and Rewaant’s outbound campaigns'
