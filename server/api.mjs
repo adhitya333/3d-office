@@ -1,6 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { Readable } from 'node:stream';
-import { pipeline } from 'node:stream/promises';
+import { createAntigravityBridge, ANTIGRAVITY_MODEL, EMPLOYEE_IDS } from './antigravity.mjs';
 
 const json = (res, status, data) => {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
@@ -20,9 +19,8 @@ async function readBody(req) {
 }
 
 /** Shared by Vite development and the production Node server. */
-export function createApiHandler({ env = process.env, fetchImpl = fetch } = {}) {
-  const model = env.OPENROUTER_MODEL || 'nvidia/nemotron-3.5-lightning:free';
-  const apiKey = env.OPENROUTER_API_KEY?.trim() || '';
+export function createApiHandler({ env = process.env, bridge = createAntigravityBridge({ env }) } = {}) {
+  const model = ANTIGRAVITY_MODEL;
   const password = env.APP_ACCESS_TOKEN || '';
   const sessions = new Map(); const rates = new Map(); const active = new Map();
   let activeTotal = 0;
@@ -50,7 +48,8 @@ export function createApiHandler({ env = process.env, fetchImpl = fetch } = {}) 
       if (session && session.expires <= Date.now()) sessions.delete(cookie);
       const authenticated = !requiresLogin || Boolean(session && session.expires > Date.now());
       if (path === '/api/ai/status' && req.method === 'GET') {
-        json(res, 200, { configured: Boolean(apiKey), authenticated, requiresLogin, model }); return true;
+        const connection = authenticated ? await bridge.status() : { configured: false };
+        json(res, 200, { ...connection, authenticated, requiresLogin, model }); return true;
       }
       if (path === '/api/session' && req.method === 'POST') {
         if (limited(`login:${req.socket.remoteAddress}`, 10)) { json(res, 429, { error: { message: 'Too many attempts. Try again in a minute.' } }); return true; }
@@ -69,51 +68,46 @@ export function createApiHandler({ env = process.env, fetchImpl = fetch } = {}) 
         res.setHeader('Set-Cookie', 'office_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');
         json(res, 200, { ok: true }); return true;
       }
+      if (['/api/ai/check', '/api/ai/sign-in'].includes(path) && req.method === 'POST') {
+        if (!authenticated) { json(res, 401, { error: { message: 'Sign in to this office first.' } }); return true; }
+        if (limited('connection:' + req.socket.remoteAddress, 6)) { json(res, 429, { error: { message: 'Wait a moment before checking again.' } }); return true; }
+        if (path.endsWith('sign-in')) {
+          if (!localHost || !loopback(req.socket.remoteAddress) || env.APP_ORIGIN) { json(res, 403, { error: { message: 'Open the official Antigravity client on the server to sign in.' } }); return true; }
+          json(res, 200, await bridge.signIn());
+        } else json(res, 200, await bridge.status(true));
+        return true;
+      }
       if (path !== '/api/ai/chat' || req.method !== 'POST') { json(res, 404, { error: { message: 'API route not found.' } }); return true; }
       if (!authenticated) { json(res, 401, { error: { message: 'Connect with the office access password in AI settings.' } }); return true; }
-      if (!apiKey) { json(res, 503, { error: { message: 'Set OPENROUTER_API_KEY on the backend to enable AI.' } }); return true; }
       const client = cookie || req.socket.remoteAddress;
       if (limited(`chat:${client}`, 30) || activeTotal >= 16 || (active.get(client) || 0) >= 8) {
         json(res, 429, { error: { message: 'The office is busy. Please try again shortly.' } }); return true;
       }
       const body = await readBody(req);
-      if (!Array.isArray(body.messages) || !body.messages.length || body.messages.length > 64 || body.messages.some(message =>
+      if (!EMPLOYEE_IDS.includes(body.employeeId) || !Array.isArray(body.messages) || !body.messages.length || body.messages.length > 64 || body.messages.some(message =>
         !message || !['system', 'user', 'assistant'].includes(message.role) || typeof message.content !== 'string' || message.content.length > 64_000)) {
         json(res, 400, { error: { message: 'Invalid conversation.' } }); return true;
       }
+      if (!(await bridge.status()).configured) { json(res, 503, { error: { message: 'Antigravity needs sign-in or access to Gemini 3.8 Flash. Check AI connection settings.' } }); return true; }
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 120_000);
       const onClose = () => { if (!res.writableEnded) controller.abort(); };
       res.on('close', onClose);
       activeTotal++; active.set(client, (active.get(client) || 0) + 1);
       try {
-        const upstream = await fetchImpl('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST', signal: controller.signal,
-          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json',
-            'HTTP-Referer': env.OPENROUTER_SITE_URL || expectedOrigin, 'X-Title': env.OPENROUTER_APP_NAME || 'Verlyn HQ' },
-          body: JSON.stringify({ model, messages: body.messages, stream: body.stream === true,
-            temperature: Math.max(0, Math.min(1, Number(body.temperature) || 0.6)),
-            max_tokens: Math.max(1, Math.min(3000, Number(body.max_tokens) || 600)) }),
-        });
-        if (!upstream.ok) {
-          // Provider diagnostics may contain request metadata: return a sanitized error.
-          await upstream.body?.cancel();
-          json(res, upstream.status === 429 ? 429 : 502, { error: { message: upstream.status === 429
-            ? 'The AI provider is rate limited. Try again shortly.' : `The AI provider could not complete the request (${upstream.status}).` } });
-        } else if (!upstream.body) json(res, 502, { error: { message: 'The AI provider returned an empty response.' } });
-        else {
-          res.writeHead(200, { 'Content-Type': body.stream === true ? 'text/event-stream' : 'application/json',
-            'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no', 'X-Content-Type-Options': 'nosniff' });
-          res.flushHeaders();
-          await pipeline(Readable.fromWeb(upstream.body), res);
-        }
+        const reply = await bridge.complete({ employeeId: body.employeeId, messages: body.messages, signal: controller.signal });
+        if (body.stream === true) {
+          res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' });
+          res.end('data: ' + JSON.stringify({ choices: [{ delta: { content: reply.content } }], model }) + '\n\ndata: [DONE]\n\n');
+        } else json(res, 200, { model, choices: [{ message: { content: reply.content } }], usage: reply.usage });
+
       } finally {
         clearTimeout(timeout); res.off('close', onClose);
         activeTotal--; const count = (active.get(client) || 1) - 1;
         if (count) active.set(client, count); else active.delete(client);
       }
     } catch (error) {
-      if (!res.headersSent) json(res, error?.name === 'AbortError' ? 504 : 400, { error: { message: error?.name === 'AbortError' ? 'The AI request timed out. Please retry.' : 'The request could not be completed.' } });
+      if (!res.headersSent) json(res, error?.name === 'AbortError' ? 504 : 400, { error: { message: error?.name === 'AbortError' ? 'The AI request timed out. Please retry.' : 'Antigravity could not complete the request. Check the connection and try again.' } });
       else if (!res.writableEnded) res.end();
     }
     return true;

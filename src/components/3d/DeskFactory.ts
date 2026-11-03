@@ -559,7 +559,7 @@ export class DeskFactory {
       station.add(chair);
 
     } else if (emp.id === 'rewaant') {
-      // ================= REWU: SLEEK TIMBER DESK & OUTBOUND RADAR =================
+      // ================= REWU: SLEEK TIMBER DESK & CREATIVE RADAR =================
       const deskTop = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.07, 1.0), woodTimberMat);
       deskTop.position.set(0, 0.76, 0);
       deskTop.castShadow = true;

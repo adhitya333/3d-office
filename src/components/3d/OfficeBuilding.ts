@@ -343,7 +343,7 @@ export class OfficeBuilding {
         width: 2.8
       },
       {
-        name: 'GROWTH STUDIO',
+        name: 'BRAND & DESIGN',
         code: 'GWS-03',
         x: 2.4,
         z: 5.2,

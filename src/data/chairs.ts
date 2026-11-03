@@ -42,7 +42,7 @@ const configuredSeats: SittableChair[] = OFFICE_CONFIG.interactionPoints
       employeeId: p.id.startsWith('seat_visitor_') ? employeeId : undefined,
       targetEmployee,
       kind: p.type === 'sofa' ? 'sofa' : p.type === 'bar_stool' ? 'bar_stool' : 'chair',
-      seatHeight: p.type === 'bar_stool' ? 0.77 : p.type === 'sofa' ? 0.44 : p.id.startsWith('canteen_armchair') ? 0.47 : 0.5175,
+      seatHeight: p.type === 'bar_stool' ? 0.77 : p.type === 'sofa' ? 0.44 : (p.id.startsWith('canteen_armchair') || p.id.startsWith('canteen_dining')) ? 0.47 : 0.5175,
     };
   });
 
@@ -56,10 +56,6 @@ const additionalSeats: SittableChair[] = [
   { id: 'ceo_meeting_south', name: 'Meeting chair · south', position: [8.5, 0, -1.6], lookDirection: Math.PI, kind: 'chair', seatHeight: 0.53 },
   { id: 'growth_lounge_west', name: 'Growth lounge · west', position: [4.3, 0, 8.5], lookDirection: Math.PI / 2.5, kind: 'chair', seatHeight: 0.48 },
   { id: 'growth_lounge_east', name: 'Growth lounge · east', position: [6.7, 0, 8.5], lookDirection: -Math.PI / 2.5, kind: 'chair', seatHeight: 0.48 },
-  { id: 'canteen_dining_1', name: 'Dining chair 1', position: [1.4, 0, -17.2], lookDirection: 0, kind: 'chair', seatHeight: 0.47 },
-  { id: 'canteen_dining_2', name: 'Dining chair 2', position: [2.6, 0, -17.2], lookDirection: 0, kind: 'chair', seatHeight: 0.47 },
-  { id: 'canteen_dining_3', name: 'Dining chair 3', position: [1.4, 0, -18.8], lookDirection: Math.PI, kind: 'chair', seatHeight: 0.47 },
-  { id: 'canteen_dining_4', name: 'Dining chair 4', position: [2.6, 0, -18.8], lookDirection: Math.PI, kind: 'chair', seatHeight: 0.47 },
 ];
 
 export const SITTABLE_CHAIRS: SittableChair[] = [...configuredSeats, ...additionalSeats];

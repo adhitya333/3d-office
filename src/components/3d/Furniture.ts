@@ -362,8 +362,8 @@ export class OfficeFurniture {
 
     // 3. Campaign & Pipeline Board (East wall of Growth Studio at [14.0, 0, 5.5])
     const growthBoard = this.createDisplayStand(
-      'GROWTH PIPELINE & FUNNEL',
-      'Outbound Velocity Tracker',
+      'BRAND & CREATIVE DIRECTION',
+      'Identity & Visual System',
       0x10B981,
       'growth_flow'
     );
@@ -403,7 +403,7 @@ export class OfficeFurniture {
     ctx.textAlign = 'center';
     ctx.fillStyle = '#F3F0E9';
     ctx.font = '600 48px Inter, Arial, sans-serif';
-    ctx.fillText(title.replace('AI AGENTIC PIPELINES', 'AI WORKFLOWS').replace('GROWTH PIPELINE & FUNNEL', 'GROWTH PIPELINE'), 512, 265, 900);
+    ctx.fillText(title.replace('AI AGENTIC PIPELINES', 'AI WORKFLOWS').replace('BRAND & CREATIVE DIRECTION', 'GROWTH PIPELINE'), 512, 265, 900);
     ctx.fillStyle = '#AAA9A5';
     ctx.font = '400 32px Inter, Arial, sans-serif';
     ctx.fillText(subtitle, 512, 345, 900);

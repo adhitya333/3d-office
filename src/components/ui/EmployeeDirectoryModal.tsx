@@ -5,13 +5,13 @@ import { EmployeeDefinition } from '../../types/office';
 import { SoundEffects } from '../../services/audio';
 import { useEmployeeWork } from '../../hooks/useEmployeeWork';
 import { workPhase } from '../../services/employeeWorkManager';
-import { OpenRouterService } from '../../services/openrouter';
+import { EmployeeAIService } from '../../services/employeeAI';
 
 const EmployeeStatus: React.FC<{ id: string }> = ({ id }) => {
   const state = useEmployeeWork(id);
-  const [configured, setConfigured] = useState(OpenRouterService.isConfigured());
+  const [configured, setConfigured] = useState(EmployeeAIService.isConfigured());
   useEffect(() => {
-    const update = () => setConfigured(OpenRouterService.isConfigured());
+    const update = () => setConfigured(EmployeeAIService.isConfigured());
     window.addEventListener('office-ai-connection', update);
     return () => window.removeEventListener('office-ai-connection', update);
   }, []);

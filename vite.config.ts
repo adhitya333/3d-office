@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => {
   server: {
     port: 3000,
     host: env.HOST || '127.0.0.1',
-    fs: { deny: ['.env', '.env.*', '**/.git/**', '**/server/**'] }
+    fs: { deny: ['.env', '.env.*', '**/.git/**', '**/server/**', '**/.office-data/**'] }
   },
   build: {
     target: 'esnext',

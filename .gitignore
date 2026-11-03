@@ -36,6 +36,7 @@ dist-ssr
 *.pem
 *.key
 coverage/
+.office-data/
 .cache/
 *.zip
 *.tsbuildinfo

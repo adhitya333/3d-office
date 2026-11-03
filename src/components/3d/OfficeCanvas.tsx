@@ -30,7 +30,7 @@ interface OfficeCanvasProps {
   onSittingChange?: (isSitting: boolean, chair: SittableChair | null) => void;
   onInteract: (employee: EmployeeDefinition) => void;
   onCallToDesk?: (employee: EmployeeDefinition) => void;
-  consumeRequest?: { kind: RefreshmentKind; nonce: number } | null;
+  consumeRequest?: { kind: RefreshmentKind; dish?: import('./Food').PlateDish; nonce: number } | null;
   onPlayerPositionUpdate?: (pos: { x: number; z: number; rotation: number }) => void;
   resetTrigger: number;
   sitTrigger?: number;
@@ -163,7 +163,7 @@ export const OfficeCanvas: React.FC<OfficeCanvasProps> = React.memo(({
   useEffect(() => {
     if (!consumeRequest || consumeRequest.nonce === 0) return;
     if (consumeRequest.kind === 'drink') playerControllerRef.current?.triggerDrink?.();
-    else playerControllerRef.current?.triggerEat?.();
+    else playerControllerRef.current?.triggerEat?.(consumeRequest.dish);
   }, [consumeRequest]);
 
   const toggleDoor = (doorId: string) => {
@@ -309,7 +309,7 @@ export const OfficeCanvas: React.FC<OfficeCanvasProps> = React.memo(({
     // 3. Collision Manager
     const collisionManager = new CollisionManager();
     collisionManagerRef.current = collisionManager;
-    npcBrain.setObstacleTest((x, z, radius) => collisionManager.isColliding(x, z, 0, radius));
+    npcBrain.setObstacleTest((x, z, radius) => collisionManager.isColliding(x, z, 0, radius), (x, z, radius) => collisionManager.isTableColliding(x, z, radius));
 
     // 4. Doors Manager (4 interactive department room double doors)
     const doorManager = new DoorManager(collisionManager);
@@ -399,7 +399,7 @@ export const OfficeCanvas: React.FC<OfficeCanvasProps> = React.memo(({
     const onClick = () => {
       if (coarsePointer) return;
       if (!isInteractingLockedRef.current && document.pointerLockElement !== mount) {
-        mount.requestPointerLock?.();
+        mount.requestPointerLock?.()?.catch(() => {});
       }
     };
 
@@ -427,7 +427,8 @@ export const OfficeCanvas: React.FC<OfficeCanvasProps> = React.memo(({
     };
     let lookPointer: { id: number; x: number; y: number } | null = null;
     const onPointerDown = (event: PointerEvent) => {
-      if (event.pointerType !== 'touch' || isInteractingLockedRef.current || lookPointer) return;
+      if (isInteractingLockedRef.current || lookPointer || document.pointerLockElement === mount) return;
+      if (event.pointerType === 'mouse' && event.button !== 0 && event.button !== 2) return;
       lookPointer = { id: event.pointerId, x: event.clientX, y: event.clientY };
       mount.setPointerCapture(event.pointerId);
     };

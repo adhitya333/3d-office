@@ -1,11 +1,11 @@
 # Office life
 
-See [README.md](README.md) for setup, controls, security and verification.
+See [README.md](README.md) for setup, controls and verification.
 
-Employees work at their assigned desks and occasionally visit the canteen. Break intervals are randomized between 8 and 15 minutes, with an extra three minutes for Ameen. Coffee is selected for 20% of breaks; lounge and snack visits remain available. At most two employees take a break at once, and busy employees stay at work.
+Use **Call to canteen** in an employee panel, or type **`/canteen`** in their chat. The employee reserves a dining seat, collects food or coffee, sits, finishes and returns. Busy employees and invitations exceeding the two-person break limit wait their turn. Three reserved pickup spots let multiple people use the serving table without sharing the same location. Its plates, food and drinks replace the old snack shelf.
 
-The coffee machine and two waiting positions are reserved separately. Agents check physical clearance before entering a spot, so a released reservation cannot cause them to stand inside a departing colleague. Seated conversations keep the torso and legs aligned with the chair. Floor/footrest and cushion heights determine seated leg poses.
+Automatic break timing is independently randomized and shorter than before. Reserved seats, walking separation and strict table checks prevent sharing spots or walking through the serving/dining tables. Seated conversations keep bodies aligned with their chairs.
 
-Chat and task requests live outside the modal and continue while the application stays open. Thinking, responding and working indicators remain visible after closing a panel. Reopening restores the latest employee state. Reloaded unfinished replies are marked interrupted. Task and chat storage is local to the browser.
+All seven employees use Antigravity with Gemini 3.8 Flash (Medium), with individual skills listed in [the manifest](agents/manifest.json). Rewu handles design and branding; Adhi, Abbu and Prox cover web/SEO/GEO; Taha and Vaibav cover CRM/AI automation; Ameen oversees and optimizes the team.
 
-Use C at an absent employee's desk, Call to desk in their panel, or team recall in the office menu to send them back. Natural-language desk recall remains supported.
+The app must stay open for active client requests to finish. Closing a panel preserves its job; reloading or closing the browser interrupts it. Use **C** near an absent employee's desk, or team recall in the office menu, to bring people back to work.

@@ -128,7 +128,7 @@ export const ControlsModal: React.FC<ControlsModalProps> = ({
             <div className="flex-1 space-y-1">
               <h3 className="font-semibold text-white">Interacting with Employees</h3>
               <p className="text-xs text-slate-400">
-                Approach an employee and press <strong className="text-slate-200">E</strong> to talk. If their desk is empty, approach the desk and press <strong className="text-amber-300">C</strong> or click <strong className="text-amber-300">Call to desk</strong> to ask them to return.
+                Approach an employee and press <strong className="text-slate-200">E</strong> to talk. If their desk is empty, approach the desk and press <strong className="text-amber-300">C</strong> or click <strong className="text-amber-300">Call to desk</strong> to ask them to return. To invite someone for a meal, open their panel and click <strong className="text-amber-300">Call to canteen</strong>, or type <strong className="text-amber-300">/canteen</strong> in their chat. They collect food or coffee, take a seat, finish and return.
               </p>
             </div>
           </div>

@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const excluded = new Set(['node_modules', '.git', '.cache', 'coverage']);
+const excluded = new Set(['node_modules', '.git', '.cache', 'coverage', '.office-data']);
 const files = [];
 function walk(directory) {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {

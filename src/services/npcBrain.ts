@@ -31,11 +31,14 @@ export interface NPCAgent {
   breakCooldownTimer: number;
   isSeated: boolean;
   facingTarget: number;
-  holdingProp: 'none' | 'coffee_cup' | 'snack_bar';
+  holdingProp: 'none' | 'coffee_cup' | 'snack_bar' | 'meal_plate';
   refreshment: RefreshmentItem | null;
   blockedTimer: number;
   seatAnchorId: string;
   visitorSeatAnchorId: string;
+  canteenRequested: boolean;
+  reservedMealSeatId: string | null;
+  finishAtSeat: boolean;
 }
 
 export class NPCBrainManager {
@@ -45,6 +48,7 @@ export class NPCBrainManager {
   private workStatuses = new Map<string, EmployeeWorkPhase>();
   private playerPosition = new THREE.Vector3(0, 0, 17.5);
   private obstacleTest?: (x: number, z: number, radius: number) => boolean;
+  private tableTest?: (x: number, z: number, radius: number) => boolean;
   private peopleRadius(agent: NPCAgent) { return agent.config.id === 'ameen' ? 0.80 : agent.config.capsuleRadius; }
   private seatRoute(path: { x: number; z: number }[], point: InteractionPointConfig) {
     if (!['desk', 'seat', 'sofa', 'bar_stool'].includes(point.type)) return path;
@@ -53,7 +57,7 @@ export class NPCBrainManager {
     return path.filter((node, index) => index === path.length - 1 || Math.hypot(node.x - point.position[0], node.z - point.position[2]) > 1.4);
   }
 
-  public setObstacleTest(test?: (x: number, z: number, radius: number) => boolean) { this.obstacleTest = test; }
+  public setObstacleTest(test?: (x: number, z: number, radius: number) => boolean, tableTest?: (x: number, z: number, radius: number) => boolean) { this.obstacleTest = test; this.tableTest = tableTest; }
   public setWorkStatus(id: string, phase: EmployeeWorkPhase) {
     this.workStatuses.set(id, phase);
     this.agents.get(id)?.controller.setTalking?.(phase === 'responding');
@@ -77,7 +81,7 @@ export class NPCBrainManager {
     const isCEO = config.id === 'ameen';
     // Jitter initial break timers so characters don't all leave at once
     const initialCooldown = OFFICE_CONFIG.schedule.minBreakIntervalSec + Math.random() *
-      (OFFICE_CONFIG.schedule.maxBreakIntervalSec - OFFICE_CONFIG.schedule.minBreakIntervalSec) + (isCEO ? 180 : 0);
+      (OFFICE_CONFIG.schedule.maxBreakIntervalSec - OFFICE_CONFIG.schedule.minBreakIntervalSec) + (isCEO ? Math.random() * 45 : 0);
 
     const agent: NPCAgent = {
       config,
@@ -96,7 +100,8 @@ export class NPCBrainManager {
       refreshment: null,
       blockedTimer: 0,
       seatAnchorId: config.seatAnchorId,
-      visitorSeatAnchorId: config.visitorSeatAnchorId
+      visitorSeatAnchorId: config.visitorSeatAnchorId,
+      canteenRequested: false, reservedMealSeatId: null, finishAtSeat: false
     };
 
     // Ensure character starts seated at their desk
@@ -121,7 +126,7 @@ export class NPCBrainManager {
     });
     this.agents.clear();
     this.activeBreaksCount = 0;
-    this.obstacleTest = undefined;
+    this.obstacleTest = undefined; this.tableTest = undefined;
   }
 
   /**
@@ -132,7 +137,7 @@ export class NPCBrainManager {
     // Recount active breaks
     let breaks = 0;
     this.agents.forEach(agent => {
-      if (agent.state !== 'AT_DESK_WORKING' && agent.state !== 'RETURNING_TO_DESK') {
+      if (!['AT_DESK_WORKING', 'RETURNING_TO_DESK'].includes(agent.state) && !(agent.state === 'CHATTING_WITH_PLAYER' && agent.previousState === 'AT_DESK_WORKING')) {
         breaks++;
       }
     });
@@ -146,6 +151,8 @@ export class NPCBrainManager {
   private updateAgent(agent: NPCAgent, delta: number, time: number, playerPos: THREE.Vector3) {
     const pos = agent.controller.group.position;
 
+    const busy = this.workStatuses.get(agent.config.id);
+    if (agent.canteenRequested && (!busy || busy === 'idle') && (agent.state === 'AT_DESK_WORKING' || (agent.state === 'CHATTING_WITH_PLAYER' && agent.previousState === 'AT_DESK_WORKING'))) this.startCanteenTrip(agent);
     switch (agent.state) {
       case 'AT_DESK_WORKING': {
         agent.stateTimer += delta;
@@ -194,11 +201,11 @@ export class NPCBrainManager {
           agent.controller.triggerDrink();
         }
 
-        if (agent.stateTimer >= OFFICE_CONFIG.schedule.coffeeDurationSec) {
+        if (agent.stateTimer >= (agent.finishAtSeat ? 3.5 : OFFICE_CONFIG.schedule.coffeeDurationSec)) {
           agent.holdingProp = 'coffee_cup';
           agent.controller.setHoldingProp?.('coffee_cup');
           // After coffee, sit in the lounge or return to desk
-          if (Math.random() > 0.4) {
+          if (agent.finishAtSeat || Math.random() > 0.4) {
             this.sendToLoungeSeat(agent);
           } else {
             this.commandBackToDesk(agent.config.id);
@@ -220,18 +227,18 @@ export class NPCBrainManager {
         agent.currentActivityDescription = `Having ${agent.refreshment?.name || 'a snack'} at the canteen`;
 
         // Pick up snack bar at shelf and animate eating
-        const prop = agent.refreshment?.kind === 'drink' ? 'coffee_cup' : 'snack_bar';
+        const prop = agent.refreshment?.kind === 'drink' ? 'coffee_cup' : 'meal_plate';
         if (agent.holdingProp !== prop && agent.stateTimer >= 1.5) {
           agent.holdingProp = prop;
-          agent.controller.setHoldingProp?.(prop);
+          agent.controller.setHoldingProp?.(prop, agent.refreshment?.dish);
         }
 
         agent.controller.updateAnimation(time, false, 1.0, false);
 
-        if (agent.stateTimer >= OFFICE_CONFIG.schedule.snackDurationSec) {
+        if (agent.stateTimer >= (agent.finishAtSeat ? 3.5 : OFFICE_CONFIG.schedule.snackDurationSec)) {
           agent.holdingProp = prop;
-          agent.controller.setHoldingProp?.(prop);
-          if (Math.random() > 0.4) {
+          agent.controller.setHoldingProp?.(prop, agent.refreshment?.dish);
+          if (agent.finishAtSeat || Math.random() > 0.4) {
             this.sendToLoungeSeat(agent);
           } else {
             this.commandBackToDesk(agent.config.id);
@@ -242,10 +249,12 @@ export class NPCBrainManager {
 
       case 'SITTING_IN_LOUNGE': {
         agent.stateTimer += delta;
-        agent.currentActivityDescription = `Relaxing in Canteen Lounge at ${agent.targetPoint?.name || 'Sofa'}`;
+        agent.controller.setMealProgress?.(Math.min(1, agent.stateTimer / OFFICE_CONFIG.schedule.loungeDurationSec));
+        agent.currentActivityDescription = agent.holdingProp !== 'none' ? `Enjoying ${agent.refreshment?.name || 'a meal'} while seated` : `Relaxing at ${agent.targetPoint?.name || 'the canteen'}`;
         agent.controller.updateAnimation(time, false, 1.0, false);
 
         if (agent.stateTimer >= OFFICE_CONFIG.schedule.loungeDurationSec) {
+          agent.holdingProp = 'none'; agent.controller.setHoldingProp?.('none');
           this.commandBackToDesk(agent.config.id);
         }
         break;
@@ -364,7 +373,8 @@ export class NPCBrainManager {
       const nearSeat = Boolean(agent.targetPoint && ['desk', 'seat', 'sofa', 'bar_stool'].includes(agent.targetPoint.type) &&
         Math.hypot(destination.x - agent.targetPoint.position[0], destination.z - agent.targetPoint.position[2]) < 0.9);
       const detour = NavigationService.getInstance().findObstacleDetour(pos.x, pos.z, destination.x, destination.z, radius,
-        (x, z, testRadius) => Boolean(this.obstacleTest?.(x, z, testRadius)) || personBlocks(x, z), nearSeat);
+        (x, z, testRadius) => Boolean(this.obstacleTest?.(x, z, testRadius)) || personBlocks(x, z), nearSeat,
+        (x, z) => Boolean(this.tableTest?.(x, z, agent.config.id === 'ameen' ? 0.22 : 0.14)));
       agent.blockedTimer = -2; // Bound retries when a door or another person is in the way.
       if (detour) {
         agent.path.splice(agent.pathIndex, replanIndex - agent.pathIndex + 1, ...detour);
@@ -375,6 +385,7 @@ export class NPCBrainManager {
     const isSeatApproach = agent.targetPoint && ['desk', 'seat', 'sofa', 'bar_stool'].includes(agent.targetPoint.type) &&
       Math.hypot(pos.x - agent.targetPoint.position[0], pos.z - agent.targetPoint.position[2]) < radius + 0.75;
     const canMove = (x: number, z: number) => {
+      if (this.tableTest?.(x, z, agent.config.id === 'ameen' ? 0.22 : 0.14)) return false;
       if (!currentlyInsideFixture && !isSeatApproach && this.obstacleTest?.(x, z, radius)) return false;
       const approaches = (otherX: number, otherZ: number, clearance: number) => {
         const next = (x - otherX) ** 2 + (z - otherZ) ** 2;
@@ -418,11 +429,16 @@ export class NPCBrainManager {
     if (agent.state !== 'AT_DESK_WORKING' || this.workStatuses.get(agent.config.id) && this.workStatuses.get(agent.config.id) !== 'idle') return;
     if (this.activeBreaksCount >= OFFICE_CONFIG.schedule.maxConcurrentBreaks) return;
     const roll = Math.random();
+    if (roll < 0.20 || roll >= 0.70) {
+      agent.canteenRequested = true;
+      if (!this.startCanteenTrip(agent)) agent.breakCooldownTimer = 20 + Math.random() * 30;
+      return;
+    }
     const candidates = roll < 0.20
       ? ['canteen_coffee_machine', 'canteen_coffee_queue_1', 'canteen_coffee_queue_2']
       : roll < 0.70
         ? OFFICE_CONFIG.interactionPoints.filter(point => point.room === 'canteen' && ['sofa', 'seat', 'bar_stool'].includes(point.type)).map(point => point.id)
-        : ['canteen_snack_shelf'];
+        : ['canteen_food_pickup_1', 'canteen_food_pickup_2', 'canteen_food_pickup_3'];
     for (const id of candidates) {
       const point = OFFICE_CONFIG.interactionPoints.find(item => item.id === id);
       if (point && this.pointIsClear(agent, point) && this.routeToPoint(agent, point)) {
@@ -434,7 +450,54 @@ export class NPCBrainManager {
     agent.breakCooldownTimer = 30 + Math.random() * 30;
   }
 
+  public commandToCanteen(employeeId: string): 'on-way' | 'queued' | 'already-there' {
+    const agent = this.agents.get(employeeId);
+    if (!agent) return 'queued';
+    if (agent.finishAtSeat && !agent.canteenRequested) return 'already-there';
+    agent.canteenRequested = true;
+    return this.startCanteenTrip(agent) ? 'on-way' : 'queued';
+  }
+
+  private startCanteenTrip(agent: NPCAgent): boolean {
+    const busy = this.workStatuses.get(agent.config.id);
+    if (busy && busy !== 'idle') return false;
+    let away = 0;
+    for (const other of this.agents.values()) if (other !== agent && !['AT_DESK_WORKING', 'RETURNING_TO_DESK'].includes(other.state) && !(other.state === 'CHATTING_WITH_PLAYER' && other.previousState === 'AT_DESK_WORKING')) away++;
+    if (away >= OFFICE_CONFIG.schedule.maxConcurrentBreaks) return false;
+    const nav = NavigationService.getInstance();
+    const seats = OFFICE_CONFIG.interactionPoints.filter(point => point.id.startsWith('canteen_dining_'));
+    const seat = seats.find(point => !nav.isPointOccupied(point.id, agent.config.id) && this.pointIsClear(agent, point));
+    if (!seat || !nav.reservePoint(seat.id, agent.config.id)) return false;
+    agent.reservedMealSeatId = seat.id;
+    const food = ['canteen_food_pickup_1', 'canteen_food_pickup_2', 'canteen_food_pickup_3'];
+    const coffee = ['canteen_coffee_machine', 'canteen_coffee_queue_1', 'canteen_coffee_queue_2'];
+    const candidates = Math.random() < 0.4 ? [...coffee, ...food] : [...food, ...coffee];
+    for (const id of candidates) {
+      const point = OFFICE_CONFIG.interactionPoints.find(item => item.id === id);
+      if (point && this.pointIsClear(agent, point) && this.routeToPoint(agent, point)) {
+        agent.canteenRequested = false; agent.finishAtSeat = true; agent.previousState = undefined;
+        this.activeBreaksCount++; return true;
+      }
+    }
+    nav.releasePoint(seat.id, agent.config.id); agent.reservedMealSeatId = null; return false;
+  }
+
+  public handlePlayerCommand(text: string, employeeId: string): string | null {
+    if (/^\/canteen(?:\s|$)/i.test(text.trim()) || /(?:come|go|head) to (?:the )?canteen|take (?:a )?(?:lunch|food|coffee) break/i.test(text)) {
+      const state = this.commandToCanteen(employeeId);
+      return state === 'queued' ? 'I’ll come to the canteen when my current work finishes and a place is free. I’ll collect something, take a seat, and then return to my desk.' : 'I’m heading to the canteen to collect food or coffee, take a seat, and finish my break before returning to my desk.';
+    }
+    if (this.checkNaturalLanguageCommand(text, employeeId)) return 'I’m returning to my desk.';
+    return null;
+  }
+
   private sendToLoungeSeat(agent: NPCAgent) {
+    const reserved = OFFICE_CONFIG.interactionPoints.find(point => point.id === agent.reservedMealSeatId);
+    if (reserved && this.pointIsClear(agent, reserved) && this.routeToPoint(agent, reserved)) return;
+    if (agent.finishAtSeat && reserved) {
+      agent.currentActivityDescription = 'Waiting for the reserved dining seat to be clear';
+      return;
+    }
     const seats = OFFICE_CONFIG.interactionPoints.filter(point => point.room === 'canteen' && ['sofa', 'seat', 'bar_stool'].includes(point.type));
     for (const seat of seats) {
       if (this.pointIsClear(agent, seat) && this.routeToPoint(agent, seat)) return;
@@ -463,8 +526,8 @@ export class NPCBrainManager {
       agent.refreshment = choices[Math.floor(Math.random() * choices.length)];
       agent.state = 'COFFEE';
       agent.stateTimer = 0;
-    } else if (agent.targetPoint.type === 'snack_shelf') {
-      const choices = REFRESHMENT_ITEMS.filter(item => item.station === 'shelf');
+    } else if (agent.targetPoint.type === 'snack_shelf' || agent.targetPoint.type === 'food_serving') {
+      const choices = REFRESHMENT_ITEMS.filter(item => item.station === 'buffet' && item.kind === 'food');
       agent.refreshment = choices[Math.floor(Math.random() * choices.length)];
       agent.state = 'SNACK';
       agent.stateTimer = 0;
@@ -473,7 +536,7 @@ export class NPCBrainManager {
       agent.stateTimer = 0;
       this.applySeatPose(agent, agent.targetPoint);
       if (agent.holdingProp !== 'none') {
-        agent.controller.setHoldingProp?.(agent.holdingProp);
+        agent.controller.setHoldingProp?.(agent.holdingProp, agent.refreshment?.dish);
       }
     }
   }
@@ -487,6 +550,9 @@ export class NPCBrainManager {
     }
 
     const nav = NavigationService.getInstance();
+    agent.canteenRequested = false; agent.finishAtSeat = false;
+    if (agent.reservedMealSeatId) nav.releasePoint(agent.reservedMealSeatId, agent.config.id);
+    agent.reservedMealSeatId = null;
     if (agent.isSeated && agent.previousState === 'AT_DESK_WORKING') {
       agent.previousState = undefined;
       this.arriveAtDesk(agent);
@@ -542,7 +608,7 @@ export class NPCBrainManager {
     agent.refreshment = null;
     agent.controller.setHoldingProp?.('none');
     agent.breakCooldownTimer = OFFICE_CONFIG.schedule.minBreakIntervalSec + Math.random() *
-      (OFFICE_CONFIG.schedule.maxBreakIntervalSec - OFFICE_CONFIG.schedule.minBreakIntervalSec) + (agent.config.id === 'ameen' ? 180 : 0);
+      (OFFICE_CONFIG.schedule.maxBreakIntervalSec - OFFICE_CONFIG.schedule.minBreakIntervalSec) + (agent.config.id === 'ameen' ? Math.random() * 45 : 0);
 
     // Snap agent position and rotation directly to their exact desk chair interaction point
     const deskPoint = OFFICE_CONFIG.interactionPoints.find(p => p.id === agent.seatAnchorId);
@@ -580,7 +646,7 @@ export class NPCBrainManager {
       const seat = OFFICE_CONFIG.interactionPoints.find(point => point.id === agent.seatAnchorId);
       if (seat) this.applySeatPose(agent, seat);
     } else if (agent.state === 'SITTING_IN_LOUNGE' && agent.targetPoint) this.applySeatPose(agent, agent.targetPoint);
-    if (this.workStatuses.get(employeeId) && this.workStatuses.get(employeeId) !== 'idle' && agent.state !== 'AT_DESK_WORKING') this.commandBackToDesk(employeeId);
+    if (this.workStatuses.get(employeeId) && this.workStatuses.get(employeeId) !== 'idle' && agent.state !== 'AT_DESK_WORKING' && !agent.finishAtSeat) this.commandBackToDesk(employeeId);
   }
 
   /**

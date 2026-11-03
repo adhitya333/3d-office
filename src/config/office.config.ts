@@ -11,7 +11,7 @@
 
 export interface InteractionPointConfig {
   id: string;
-  type: 'seat' | 'coffee_machine' | 'snack_shelf' | 'fridge' | 'sofa' | 'bar_stool' | 'standing_spot' | 'desk';
+  type: 'seat' | 'coffee_machine' | 'snack_shelf' | 'food_serving' | 'fridge' | 'sofa' | 'bar_stool' | 'standing_spot' | 'desk';
   position: [number, number, number]; // [x, y, z]
   facingDirection: number; // in radians
   room: string;
@@ -115,8 +115,8 @@ export const OFFICE_CONFIG: OfficeConfig = {
   officeName: 'Verlyn Tech Enterprise HQ 2.0',
 
   schedule: {
-    minBreakIntervalSec: 480, // 8 minutes between breaks
-    maxBreakIntervalSec: 900, // 15 minutes, randomized per employee
+    minBreakIntervalSec: 120, // Independent randomized breaks
+    maxBreakIntervalSec: 360, // Varied shorter work periods
     maxConcurrentBreaks: 2,   // Maximum 2 employees away from desks at once
     coffeeDurationSec: 22,
     snackDurationSec: 24,
@@ -491,16 +491,16 @@ export const OFFICE_CONFIG: OfficeConfig = {
     {
       id: 'rewaant',
       name: 'Rewu (Rewaant)',
-      role: 'Head of Growth & Outbound Pipeline',
+      role: 'Head of Design & Brand Identity',
       departmentId: 'growth',
-      departmentName: 'Growth Studio',
-      roomName: 'Growth Studio',
-      roleDescription: 'High-velocity B2B outbound campaigns, cold email deliverability, ICP qualification, multi-touch sequences, sales pipeline acceleration, and market expansion.',
+      departmentName: 'Brand & Design Studio',
+      roomName: 'Brand & Design Studio',
+      roleDescription: 'Brand identity, creative direction, visual design, typography, color systems and consistent brand experiences.',
       responsibilities: [
-        'Engineering high-converting outbound sequences across email, LinkedIn, and phone',
-        'Building automated inbox warmup, domain reputation, and deliverability safeguards',
-        'Segmenting ICP target accounts and crafting high-resonance value hooks',
-        'Accelerating pipeline velocity and booking qualified executive strategy sessions'
+        'Developing clear brand strategy, identity and visual direction',
+        'Designing typography, color systems, layouts and creative assets',
+        'Partnering with Abbu on website design and Adhi on implementation',
+        'Reviewing visual consistency, accessibility and quality across each deliverable'
       ],
       capsuleRadius: 0.30,
       walkSpeed: 1.55,
@@ -522,14 +522,14 @@ export const OFFICE_CONFIG: OfficeConfig = {
         chairModel: 'leather_executive',
         deskType: 'walnut_credenza',
         personalItems: ['outbound_headset', 'monstera_plant', 'lead_qualification_playbook', 'matte_tumbler'],
-        boardTitle: 'B2B GROWTH PIPELINE & OUTBOUND RADAR',
+        boardTitle: 'BRAND IDENTITY & CREATIVE DIRECTION',
         boardTasks: [
-          'Q4 Enterprise Outbound Campaign Launch',
-          'Inbox Warmup & Deliverability Health (99.2%)',
-          'High-Touch ICP Decision Maker Sequences'
+          'Brand identity and positioning',
+          'Typography, color and visual system',
+          'Creative review and asset delivery'
         ]
       },
-      funFact: 'Has written cold emails that landed meetings with Fortune 500 CEOs within 11 minutes of sending.',
+      funFact: 'Collects typography references and notices inconsistent brand spacing before anyone else.',
       teamBonds: [
         {
           friendId: 'abbu',
@@ -756,11 +756,12 @@ export const OFFICE_CONFIG: OfficeConfig = {
       { id: 'node_canteen_entry', x: 0, z: -12.0, room: 'canteen', clearanceRadius: 1.8 },
       { id: 'node_canteen_hub', x: 0, z: -15.5, room: 'canteen', clearanceRadius: 2.0 },
       { id: 'node_canteen_coffee_bar', x: -1.05, z: -14.5, room: 'canteen', clearanceRadius: 1.5 },
-      { id: 'node_canteen_snack_wall', x: 2.65, z: -14.5, room: 'canteen', clearanceRadius: 1.5 },
+      { id: 'node_canteen_snack_wall', x: 1.9, z: -14.5, room: 'canteen', clearanceRadius: 1.5 },
       { id: 'node_canteen_lounge_aisle', x: -0.45, z: -17.7, room: 'canteen', clearanceRadius: 1.5 },
       { id: 'node_canteen_sofa_zone', x: -2.5, z: -18.10, room: 'canteen', clearanceRadius: 1.6 },
       { id: 'node_canteen_bar_stools', x: 0, z: -19.2, room: 'canteen', clearanceRadius: 1.5 },
-      { id: 'node_canteen_fridge', x: 3.2, z: -17.5, room: 'canteen', clearanceRadius: 1.5 }
+      { id: 'node_canteen_dining_south', x: 0.2, z: -17.0, room: 'canteen', clearanceRadius: 1.0 },
+      { id: 'node_canteen_dining_north', x: 0.2, z: -18.8, room: 'canteen', clearanceRadius: 1.0 }
     ],
 
     edges: [
@@ -797,6 +798,8 @@ export const OFFICE_CONFIG: OfficeConfig = {
       { from: 'node_ceo_center', to: 'node_ceo_desk_front', distance: 3.0 },
       { from: 'node_ceo_desk_front', to: 'node_ceo_throne_approach', distance: 2.8 },
 
+      { from: 'node_canteen_hub', to: 'node_canteen_dining_south', distance: 1.5 },
+      { from: 'node_canteen_dining_south', to: 'node_canteen_dining_north', distance: 1.8 },
       // Canteen Door to Interior Zones (Routing cleanly around coffee table & armchairs)
       { from: 'node_door_canteen', to: 'node_canteen_entry', distance: 1.5 },
       { from: 'node_canteen_entry', to: 'node_canteen_hub', distance: 3.5 },
@@ -806,7 +809,6 @@ export const OFFICE_CONFIG: OfficeConfig = {
       { from: 'node_canteen_hub', to: 'node_canteen_lounge_aisle', distance: 2.5 },
       { from: 'node_canteen_lounge_aisle', to: 'node_canteen_sofa_zone', distance: 1.8 },
       { from: 'node_canteen_hub', to: 'node_canteen_bar_stools', distance: 3.7 },
-      { from: 'node_canteen_hub', to: 'node_canteen_fridge', distance: 3.8 }
     ]
   },
 
@@ -995,27 +997,9 @@ export const OFFICE_CONFIG: OfficeConfig = {
       room: 'canteen',
       approachNodeId: 'node_canteen_hub'
     },
-    {
-      id: 'canteen_snack_shelf',
-      type: 'snack_shelf',
-      name: "Artisan Snack & Fruit Wall",
-      position: [2.65, 0, -14.5],
-      facingDirection: Math.PI / 2, // Faces East directly into snack wall
-      room: 'canteen',
-      approachNodeId: 'node_canteen_snack_wall',
-      userInteractable: true
-    },
-    {
-      id: 'canteen_fridge',
-      type: 'fridge',
-      name: "Cold Beverage & Milk Refrigerator",
-      position: [3.3, 0, -17.5],
-      facingDirection: Math.PI / 2, // Faces East into fridge door
-      room: 'canteen',
-      approachNodeId: 'node_canteen_fridge',
-      userInteractable: true
-    },
-
+    { id: 'canteen_food_pickup_1', type: 'food_serving', name: 'Serving table · pickup 1', position: [1.9, 0, -13], facingDirection: Math.PI / 2, room: 'canteen', approachNodeId: 'node_canteen_hub', userInteractable: true },
+    { id: 'canteen_food_pickup_2', type: 'food_serving', name: 'Serving table · pickup 2', position: [1.9, 0, -14.5], facingDirection: Math.PI / 2, room: 'canteen', approachNodeId: 'node_canteen_hub', userInteractable: true },
+    { id: 'canteen_food_pickup_3', type: 'food_serving', name: 'Serving table · pickup 3', position: [1.9, 0, -16], facingDirection: Math.PI / 2, room: 'canteen', approachNodeId: 'node_canteen_hub', userInteractable: true },
     // --- Canteen Lounge Seating ---
     {
       id: 'canteen_sofa_seat_1',
@@ -1110,6 +1094,10 @@ export const OFFICE_CONFIG: OfficeConfig = {
       room: 'canteen',
       approachNodeId: 'node_canteen_bar_stools',
       userInteractable: true
-    }
+    },
+    { id: 'canteen_dining_1', type: 'seat', name: 'Dining chair 1', position: [1.4, 0, -17.2], facingDirection: Math.PI, room: 'canteen', approachNodeId: 'node_canteen_dining_south', userInteractable: true },
+    { id: 'canteen_dining_2', type: 'seat', name: 'Dining chair 2', position: [2.6, 0, -17.2], facingDirection: Math.PI, room: 'canteen', approachNodeId: 'node_canteen_dining_south', userInteractable: true },
+    { id: 'canteen_dining_3', type: 'seat', name: 'Dining chair 3', position: [1.4, 0, -18.8], facingDirection: 0, room: 'canteen', approachNodeId: 'node_canteen_dining_north', userInteractable: true },
+    { id: 'canteen_dining_4', type: 'seat', name: 'Dining chair 4', position: [2.6, 0, -18.8], facingDirection: 0, room: 'canteen', approachNodeId: 'node_canteen_dining_north', userInteractable: true }
   ]
 };

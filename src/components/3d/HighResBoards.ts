@@ -15,7 +15,7 @@ export class HighResBoards {
     const signs: RoomSign[] = [
       { title: 'WEB & SEARCH', subtitle: 'Design · Build · Refine', position: [-9.5, 2, -10.35], rotationY: 0 },
       { title: 'AI & SYSTEMS', subtitle: 'Research · Integrate · Ship', position: [-9.5, 2, 10.35], rotationY: Math.PI },
-      { title: 'GROWTH STUDIO', subtitle: 'Ideas into outcomes', position: [9.5, 2, 10.35], rotationY: Math.PI },
+      { title: 'BRAND & DESIGN', subtitle: 'Ideas into outcomes', position: [9.5, 2, 10.35], rotationY: Math.PI },
       { title: 'EXECUTIVE OFFICE', subtitle: 'Direction · Decisions · Delivery', position: [2.67, 2, -8.6], rotationY: Math.PI / 2 },
     ];
 

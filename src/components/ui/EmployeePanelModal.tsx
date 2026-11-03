@@ -36,7 +36,7 @@ import {
 import { EmployeeDefinition, EmployeeTask, Project } from '../../types/office';
 import { TaskDeliverable } from '../../types/integration';
 import { StorageService, ChatMessage } from '../../services/storage';
-import { OpenRouterService } from '../../services/openrouter';
+import { EmployeeAIService } from '../../services/employeeAI';
 import { SoundEffects } from '../../services/audio';
 import { npcBrain } from '../../services/npcBrain';
 import { employeeWork } from '../../services/employeeWork';
@@ -106,15 +106,17 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
   const followChatRef = useRef(true);
   const lastChatElementRef = useRef<HTMLDivElement | null>(null);
 
-  // OpenRouter State
-  const [isConfigured, setIsConfigured] = useState<boolean>(OpenRouterService.isConfigured());
+  // Antigravity connection
+  const [isConfigured, setIsConfigured] = useState<boolean>(EmployeeAIService.isConfigured());
   const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
   const [tempApiKey, setTempApiKey] = useState<string>('');
+  const [checkingConnection, setCheckingConnection] = useState(false);
+  const [canteenNotice, setCanteenNotice] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   useEffect(() => {
-    const update = () => setIsConfigured(OpenRouterService.isConfigured());
+    const update = () => setIsConfigured(EmployeeAIService.isConfigured());
     window.addEventListener('office-ai-connection', update);
-    void OpenRouterService.refreshConnection(true);
+    void EmployeeAIService.refreshConnection(true);
     return () => window.removeEventListener('office-ai-connection', update);
   }, []);
   const executingTaskId = work.executingTaskId;
@@ -186,7 +188,7 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
       case 'taha':
         return `Hello! Taha here, Systems Engineering & CRM/ERP specialist. I handle PostgreSQL schemas, HubSpot/Salesforce sync pipelines, and database migrations.`;
       case 'rewaant':
-        return `Hey! Rewaant here, Growth Studio lead. Let's engineer high-velocity outbound campaigns, cold email sequences, and ICP qualification matrices.`;
+        return `Hey! Rewu here. I lead design and branding: visual identity, typography, color systems, and creative direction. What are we designing?`;
       case 'ameen':
         return `Welcome. Ameen here, CEO and Master Strategist. What strategic goals, cross-department roadmaps, or resource allocations are we planning?`;
       default:
@@ -199,7 +201,7 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
     setTasks(loadedTasks);
     setActivityLogs(StorageService.getActivityLogs(employee.id));
     setDeliverables(StorageService.getDeliverables(employee.id));
-    setIsConfigured(OpenRouterService.isConfigured());
+    setIsConfigured(EmployeeAIService.isConfigured());
 
     // Load Chat messages or seed initial greeting
     let messages = StorageService.getChatMessages(employee.id);
@@ -329,7 +331,7 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
   };
   // CONVERT RECENT CHAT INTO AN ACTIVE TASK AND START EXECUTION
   const handleConvertChatToTaskAndRun = async () => {
-    if (!OpenRouterService.isConfigured()) {
+    if (!EmployeeAIService.isConfigured()) {
       setShowApiKeyModal(true);
       return;
     }
@@ -355,7 +357,7 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
         assignedVia: 'Live Interactive Chat Session',
         projectScope: `Formulated directly from chat discussion with ${employee.name}`
       },
-      notes: `Queued and executed via chat with ${OpenRouterService.getModel()}`
+      notes: `Queued and executed via chat with ${EmployeeAIService.getModel()}`
     };
 
     StorageService.saveTask(newTask);
@@ -407,7 +409,7 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
       updatedAt: new Date().toISOString(),
       briefDetails: { ...formData },
       notes: executeImmediately
-        ? `Queued for immediate execution via ${OpenRouterService.getModel()}`
+        ? `Queued for immediate execution via ${EmployeeAIService.getModel()}`
         : 'Assignment saved and queued in registry.'
     };
 
@@ -470,8 +472,8 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
   const handleSaveRuntimeKey = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await OpenRouterService.connect(tempApiKey);
-      setIsConfigured(OpenRouterService.isConfigured());
+      await EmployeeAIService.connect(tempApiKey);
+      setIsConfigured(EmployeeAIService.isConfigured());
       setShowApiKeyModal(false);
       setTempApiKey('');
       SoundEffects.playSuccess();
@@ -480,7 +482,7 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
     }
   };
 
-  const configuredModel = OpenRouterService.getModel();
+  const configuredModel = EmployeeAIService.getModel();
 
   return (
     <div
@@ -517,10 +519,10 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
                   <button
                     onClick={() => setShowApiKeyModal(true)}
                     className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-full text-[11px] font-medium text-[#a9c6b0] border border-[#42594d] hover:bg-[#273a31]"
-                    title={`Connected to ${configuredModel}. Open connection settings`}
+                    title={`Antigravity · ${configuredModel}. Open connection settings`}
                   >
                     <span className="w-1.5 h-1.5 rounded-full bg-[#8fc29c]" />
-                    <span>Connected</span>
+                    <span>Antigravity connected</span>
                   </button>
                 ) : (
                   <button
@@ -633,6 +635,10 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
               <div className="employee-chat-toolbar shrink-0 px-3 sm:px-4 py-2.5 border-b border-[#303940] flex items-center justify-between gap-2">
                 <span className="text-xs font-medium text-[#cbd2d0] truncate">Conversation with {employee.name}</span>
                 <div className="flex items-center gap-1.5 shrink-0">
+                  <button onClick={() => {
+                    const result = npcBrain.commandToCanteen(employee.id);
+                    setCanteenNotice(result === 'queued' ? 'Canteen invitation queued until work and a seat are free.' : result === 'already-there' ? 'Already on a canteen break.' : 'Heading to the canteen to collect food or coffee, sit, and finish.');
+                  }} className="px-2.5 py-1.5 rounded-md border border-[#566850] text-[#bfd1b8] hover:bg-[#263237] text-[11px] font-medium" title="Invite this employee to collect food or coffee and take a seat. Chat command: /canteen">Call to canteen</button>
                   <button
                     onClick={() => handleAskProgressUpdate()}
                     disabled={isRequestingUpdate || isSendingChat}
@@ -660,6 +666,7 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
                 }}
                 className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-5 py-4 space-y-3"
               >
+                {canteenNotice && <p role="status" className="text-xs text-[#c8d6bc] bg-[#29372d] rounded-lg p-2">{canteenNotice} Use /canteen in chat to invite again.</p>}
                 {chatMessages.map(message => {
                   const fromUser = message.sender === 'user';
                   return (
@@ -893,7 +900,7 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
                 </div>
                 <div>
                   <h3 className="font-bold text-white text-base">AI connection</h3>
-                  <p className="text-xs text-slate-400">Verlyn HQ Autonomous Enterprise Integration</p>
+                  <p className="text-xs text-slate-400">Antigravity · Gemini 3.8 Flash for all employees</p>
                 </div>
               </div>
               <button
@@ -927,8 +934,13 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
 
               <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 text-xs text-slate-300 space-y-2">
                 <p className="font-semibold text-white">Private backend connection</p>
-                <p>Your OpenRouter key stays on the server. Configure <code>OPENROUTER_API_KEY</code> in the server environment, then restart it.</p>
-                <p>For a shared office, enter the office access password below. This is separate from your provider API key.</p>
+                <p>Employees use the official Antigravity CLI on this computer with Gemini 3.8 Flash (Medium). Each request loads that employee’s SKILL.md.</p>
+                <p>Google sign-in stays in Antigravity’s official client and private credential storage. This website never asks for your Google password.</p>
+                <div className="flex flex-wrap gap-2 pt-2">
+                  <button type="button" disabled={checkingConnection} onClick={async () => { setCheckingConnection(true); setConnectionError(null); try { const result = await EmployeeAIService.signInAntigravity(); if (result.alreadyConnected) { setIsConfigured(true); setConnectionError(null); } else setConnectionError('Complete sign-in in the official Antigravity window, then click Check connection.'); } catch(error) { setConnectionError(error instanceof Error ? error.message : 'Could not open Antigravity.'); } finally { setCheckingConnection(false); } }} className="rounded-lg border border-[#566850] px-3 py-2 text-[#cddbc8] disabled:opacity-50">Open Antigravity sign-in</button>
+                  <button type="button" disabled={checkingConnection} onClick={async () => { setCheckingConnection(true); setConnectionError(null); try { await EmployeeAIService.checkAntigravity(); setIsConfigured(true); } catch(error) { setConnectionError(error instanceof Error ? error.message : 'Connection failed.'); } finally { setCheckingConnection(false); } }} className="rounded-lg bg-[#baa477] text-[#171c1e] px-3 py-2 disabled:opacity-50">{checkingConnection ? 'Checking…' : 'Check connection'}</button>
+                </div>
+                <p className="pt-2 text-[11px] text-slate-400">Sharing this office over a network? Unlock this website with its separate office access password below.</p>
               </div>
               <div className="space-y-2 pt-1">
                 {connectionError && <p role="alert" className="text-rose-300">{connectionError}</p>}
@@ -942,11 +954,11 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
                   />
 
                   <div className="flex items-center justify-between pt-1">
-                    {isConfigured && (
+                    {isConfigured && EmployeeAIService.requiresOfficeLogin() && (
                       <button
                         type="button"
                         onClick={() => {
-                          void OpenRouterService.disconnect().then(() => setIsConfigured(OpenRouterService.isConfigured()));
+                          void EmployeeAIService.disconnect().then(() => setIsConfigured(EmployeeAIService.isConfigured()));
                         }}
                         className="text-xs text-rose-400 hover:underline"
                       >

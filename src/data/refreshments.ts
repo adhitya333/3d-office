@@ -1,4 +1,4 @@
-export type RefreshmentStationId = 'water' | 'coffee' | 'shelf';
+export type RefreshmentStationId = 'water' | 'coffee' | 'buffet';
 export type RefreshmentKind = 'drink' | 'food';
 
 export interface RefreshmentItem {
@@ -6,6 +6,7 @@ export interface RefreshmentItem {
   name: string;
   kind: RefreshmentKind;
   station: RefreshmentStationId;
+  dish?: 'rice' | 'pasta' | 'salad' | 'sandwich' | 'fruit' | 'nuts' | 'bar';
 }
 
 export interface RefreshmentStation {
@@ -18,7 +19,7 @@ export interface RefreshmentStation {
 export const REFRESHMENT_STATIONS: RefreshmentStation[] = [
   { id: 'water', name: 'Water cooler', position: [-2, 0], radius: 1.8 },
   { id: 'coffee', name: 'Coffee bar', position: [-1.9, -14.5], radius: 2.0 },
-  { id: 'shelf', name: 'Snack shelf', position: [3.1, -14.5], radius: 1.9 },
+  { id: 'buffet', name: 'Serving table', position: [2.2, -14.5], radius: 2.4 },
 ];
 
 export const REFRESHMENT_ITEMS: RefreshmentItem[] = [
@@ -28,13 +29,17 @@ export const REFRESHMENT_ITEMS: RefreshmentItem[] = [
   { id: 'flat-white', name: 'Flat white', kind: 'drink', station: 'coffee' },
   { id: 'cold-brew', name: 'Cold brew', kind: 'drink', station: 'coffee' },
   { id: 'oat-milk', name: 'Oat milk', kind: 'drink', station: 'coffee' },
-  { id: 'sparkling-water', name: 'Sparkling water', kind: 'drink', station: 'shelf' },
-  { id: 'kombucha', name: 'Kombucha', kind: 'drink', station: 'shelf' },
-  { id: 'matcha-tea', name: 'Matcha tea', kind: 'drink', station: 'shelf' },
-  { id: 'apple', name: 'Apple', kind: 'food', station: 'shelf' },
-  { id: 'orange', name: 'Orange', kind: 'food', station: 'shelf' },
-  { id: 'protein-bar', name: 'Protein bar', kind: 'food', station: 'shelf' },
-  { id: 'almonds', name: 'Almonds', kind: 'food', station: 'shelf' },
+  { id: 'sparkling-water', name: 'Sparkling water', kind: 'drink', station: 'buffet' },
+  { id: 'kombucha', name: 'Kombucha', kind: 'drink', station: 'buffet' },
+  { id: 'matcha-tea', name: 'Matcha tea', kind: 'drink', station: 'buffet' },
+  { id: 'rice-bowl', name: 'Rice & roasted vegetables', kind: 'food', station: 'buffet', dish: 'rice' },
+  { id: 'pasta', name: 'Tomato pasta', kind: 'food', station: 'buffet', dish: 'pasta' },
+  { id: 'salad', name: 'Garden salad', kind: 'food', station: 'buffet', dish: 'salad' },
+  { id: 'sandwich', name: 'Grilled sandwich', kind: 'food', station: 'buffet', dish: 'sandwich' },
+  { id: 'apple', name: 'Apple', kind: 'food', station: 'buffet', dish: 'fruit' },
+  { id: 'orange', name: 'Orange', kind: 'food', station: 'buffet', dish: 'fruit' },
+  { id: 'protein-bar', name: 'Protein bar', kind: 'food', station: 'buffet', dish: 'bar' },
+  { id: 'almonds', name: 'Almonds', kind: 'food', station: 'buffet', dish: 'nuts' },
 ];
 
 export const nearestRefreshmentStation = (x: number, z: number): RefreshmentStation | null => {

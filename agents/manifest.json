@@ -1,0 +1,34 @@
+{
+  "provider": "antigravity",
+  "model": "gemini-3.8-flash-medium",
+  "employees": {
+    "adhi": {
+      "skill": ".agents/skills/adhi-web-engineering/SKILL.md",
+      "name": "Adhi"
+    },
+    "abbu": {
+      "skill": ".agents/skills/abbu-web-design/SKILL.md",
+      "name": "Abbu"
+    },
+    "prox": {
+      "skill": ".agents/skills/prox-seo-geo/SKILL.md",
+      "name": "Prox"
+    },
+    "rewaant": {
+      "skill": ".agents/skills/rewu-design-branding/SKILL.md",
+      "name": "Rewu"
+    },
+    "taha": {
+      "skill": ".agents/skills/taha-crm-systems/SKILL.md",
+      "name": "Taha"
+    },
+    "vaibav": {
+      "skill": ".agents/skills/vaibav-ai-automation/SKILL.md",
+      "name": "Vaibav"
+    },
+    "ameen": {
+      "skill": ".agents/skills/ameen-ceo-oversight/SKILL.md",
+      "name": "Ameen"
+    }
+  }
+}

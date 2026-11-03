@@ -17,7 +17,7 @@ import { EmployeeDefinition, Project, SittableChair } from './types/office';
 import { StorageService } from './services/storage';
 import { SoundEffects } from './services/audio';
 import { npcBrain } from './services/npcBrain';
-import { OpenRouterService } from './services/openrouter';
+import { EmployeeAIService } from './services/employeeAI';
 import { RefreshmentItem, RefreshmentKind, RefreshmentStation } from './data/refreshments';
 
 export const App: React.FC = () => {
@@ -36,7 +36,7 @@ export const App: React.FC = () => {
   const [nearRefreshment, setNearRefreshment] = useState<RefreshmentStation | null>(null);
   const [refreshmentMenuStation, setRefreshmentMenuStation] = useState<RefreshmentStation | null>(null);
   const [refreshmentToast, setRefreshmentToast] = useState<string | null>(null);
-  const [consumeRequest, setConsumeRequest] = useState<{ kind: RefreshmentKind; nonce: number } | null>(null);
+  const [consumeRequest, setConsumeRequest] = useState<{ kind: RefreshmentKind; dish?: RefreshmentItem['dish']; nonce: number } | null>(null);
   const refreshmentToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isSitting, setIsSitting] = useState<boolean>(false);
   const [seatedChair, setSeatedChair] = useState<SittableChair | null>(null);
@@ -92,7 +92,7 @@ export const App: React.FC = () => {
   // Initialize data from local storage
   useEffect(() => {
     const loadedProjects = StorageService.getProjects();
-    void OpenRouterService.refreshConnection(true);
+    void EmployeeAIService.refreshConnection(true);
     const loadedSettings = StorageService.getSettings();
 
     setProjects(loadedProjects);
@@ -173,7 +173,7 @@ export const App: React.FC = () => {
   }, []);
 
   const handleChooseRefreshment = (item: RefreshmentItem) => {
-    setConsumeRequest(previous => ({ kind: item.kind, nonce: (previous?.nonce || 0) + 1 }));
+    setConsumeRequest(previous => ({ kind: item.kind, dish: item.dish, nonce: (previous?.nonce || 0) + 1 }));
     setRefreshmentMenuStation(null);
     setRefreshmentToast(`${item.name} ${item.kind === 'drink' ? 'served' : 'enjoyed'}`);
     if (item.kind === 'drink') SoundEffects.playDrinkWater();

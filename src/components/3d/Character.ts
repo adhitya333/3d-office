@@ -1,3 +1,4 @@
+import { createFoodPlate, PlateDish } from './Food';
 import * as THREE from 'three';
 import { EmployeeDefinition } from '../../types/office';
 import { OfficeTextureGenerator } from './OfficeTextureGenerator';
@@ -9,9 +10,10 @@ export interface CharacterMeshController {
   updateAnimation: (time: number, isMoving?: boolean, speedMultiplier?: number, isJumping?: boolean) => void;
   lookAt: (target: THREE.Vector3) => void;
   setSitting?: (isSitting: boolean, isSofa?: boolean, isBarStool?: boolean, seatHeight?: number) => void;
-  setHoldingProp?: (prop: 'none' | 'coffee_cup' | 'snack_bar') => void;
+  setHoldingProp?: (prop: 'none' | 'coffee_cup' | 'snack_bar' | 'meal_plate', dish?: PlateDish) => void;
+  setMealProgress?: (progress: number) => void;
   triggerDrink?: () => void;
-  triggerEat?: () => void;
+  triggerEat?: (dish?: PlateDish) => void;
   setTalking?: (isTalking: boolean) => void;
 }
 
@@ -266,6 +268,24 @@ export class CharacterFactory {
     ring.position.y = 0.02;
     group.add(ring);
 
+    const mealPlate = new THREE.Group(); mealPlate.name = 'Held meal plate';
+    mealPlate.position.set(0, -0.35, 0.26); mealPlate.visible = false; leftArmGroup.add(mealPlate);
+    let mealDish: PlateDish | null = null;
+    const setMealDish = (dish: PlateDish = 'rice') => {
+      if (mealDish === dish) return;
+      mealPlate.traverse(object => { if (object instanceof THREE.Mesh) { object.geometry.dispose(); const mats = Array.isArray(object.material) ? object.material : [object.material]; mats.forEach(mat => { if (!mat.userData.sharedFoodMaterial) mat.dispose(); }); } });
+      mealPlate.clear(); mealPlate.add(createFoodPlate(dish)); mealDish = dish;
+    };
+    const setFoodProgress = (progress: number) => {
+      const food = mealPlate.children[0];
+      food?.children.slice(2).forEach(piece => {
+        if (piece.userData.servedScaleY === undefined) piece.userData.servedScaleY = piece.scale.y;
+        piece.scale.y = piece.userData.servedScaleY * Math.max(0.02, 1 - progress);
+        piece.visible = progress < 1;
+      });
+    };
+    const fork = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.16, 0.009), new THREE.MeshStandardMaterial({ color: 0xB8B8AA, metalness: 0.7, roughness: 0.3 }));
+    fork.position.set(0, -0.36, 0.12); fork.visible = false; fork.userData.isDynamic = true; rightArmGroup.add(fork);
     let walkCycle = 0;
     let isSeated = false;
     let seatedHipHeight = 0.5275;
@@ -284,14 +304,15 @@ export class CharacterFactory {
         isEating = false;
         drinkTimer = 0;
         cupGroup.visible = true;
-        snackGroup.visible = false;
+        snackGroup.visible = false; mealPlate.visible = false; fork.visible = false;
       },
-      triggerEat: () => {
+      triggerEat: (dish: PlateDish = 'rice') => {
         isDrinking = true;
         isEating = true;
         drinkTimer = 0;
         cupGroup.visible = false;
-        snackGroup.visible = true;
+        snackGroup.visible = false;
+        setMealDish(dish); setFoodProgress(0); mealPlate.visible = true; fork.visible = true;
       },
       setSitting: (sitting: boolean, isSofa = false, isBarStool = false, seatHeight = 0.5175) => {
         isSeated = sitting;
@@ -326,18 +347,20 @@ export class CharacterFactory {
 
         if (isSeated) {
           hipGroup.position.y = seatedHipHeight + Math.sin(time * 2) * 0.008;
-          return;
         }
 
         // ================= DRINKING ANIMATION OVERRIDE =================
         if (isDrinking) {
+          if (isEating) { leftArmGroup.rotation.x = -0.95; mealPlate.rotation.x = 0.95; }
           drinkTimer += animDelta;
           const progress = Math.min(1, drinkTimer / DRINK_DURATION);
+          if (isEating) setFoodProgress(progress);
 
           if (progress >= 1) {
             isDrinking = false;
             cupGroup.visible = false;
-            snackGroup.visible = false;
+            snackGroup.visible = false; mealPlate.visible = false; fork.visible = false;
+            leftArmGroup.rotation.x = 0;
             headGroup.rotation.set(0, 0, 0);
             rightArmGroup.rotation.set(0, 0, 0);
           } else {
@@ -370,6 +393,7 @@ export class CharacterFactory {
           }
         }
 
+        if (isSeated) return;
         if (isAirborne) {
           // Dynamic jumping pose: legs swing up, arms raise
           leftLegGroup.rotation.x = -0.45;
@@ -425,7 +449,7 @@ export class CharacterFactory {
    * Creates an employee block character capable of sitting at desk, walking with velocity-synced stride,
    * taking breaks in the canteen, and displaying an ULTRA-HIGH CONTRAST BILLBOARD.
    */
-  public static createEmployeeAvatar(emp: any): CharacterMeshController & { billboard: THREE.Mesh; setHoldingProp?: (prop: 'none' | 'coffee_cup' | 'snack_bar') => void } {
+  public static createEmployeeAvatar(emp: any): CharacterMeshController & { billboard: THREE.Mesh; setHoldingProp?: (prop: 'none' | 'coffee_cup' | 'snack_bar' | 'meal_plate', dish?: PlateDish) => void } {
     const group = new THREE.Group();
 
     const isCEO = emp.id === 'ameen';
@@ -509,13 +533,13 @@ export class CharacterFactory {
         roughness: 0.15
       });
       const buckle = new THREE.Mesh(buckleGeo, buckleMat);
-      buckle.position.set(0, 0.16, 0.235);
+      buckle.position.set(0, 0.11, 0.205);
       hipGroup.add(buckle);
 
       // Executive gold silk tie draped over the shirt front
-      const tieGeo = new THREE.BoxGeometry(0.12, 0.36, 0.02);
+      const tieGeo = new THREE.BoxGeometry(0.12, 0.26, 0.02);
       const tie = new THREE.Mesh(tieGeo, accentMat);
-      tie.position.set(0, 0.30, 0.235);
+      tie.position.set(0, 0.37, 0.235);
       hipGroup.add(tie);
 
       // Crisp white dress shirt collar
@@ -637,7 +661,7 @@ export class CharacterFactory {
     const armSpacingX = isCEO ? 0.65 : 0.25;
 
     const leftArmGroup = new THREE.Group();
-    leftArmGroup.position.set(-armSpacingX, isCEO ? 0.48 : 0.42, 0);
+    leftArmGroup.position.set(-armSpacingX, isCEO ? 0.58 : 0.42, 0);
     const leftArm = new THREE.Mesh(armGeo, shirtMat);
     leftArm.position.set(0, -0.16, 0);
     leftArmGroup.add(leftArm);
@@ -652,7 +676,7 @@ export class CharacterFactory {
     hipGroup.add(leftArmGroup);
 
     const rightArmGroup = new THREE.Group();
-    rightArmGroup.position.set(armSpacingX, isCEO ? 0.48 : 0.42, 0);
+    rightArmGroup.position.set(armSpacingX, isCEO ? 0.58 : 0.42, 0);
     const rightArm = new THREE.Mesh(armGeo, shirtMat);
     rightArm.position.set(0, -0.16, 0);
     rightArmGroup.add(rightArm);
@@ -688,6 +712,7 @@ export class CharacterFactory {
     const coffeeFill = new THREE.Mesh(new THREE.CircleGeometry(0.040, 16), coffeeMat);
     coffeeFill.rotation.x = -Math.PI / 2;
     coffeeFill.position.y = 0.038;
+    coffeeFill.userData.isDynamic = true;
     cupGroup.add(coffeeFill);
 
     cupGroup.visible = false;
@@ -729,6 +754,24 @@ export class CharacterFactory {
     snackGroup.visible = false;
     rightArmGroup.add(snackGroup);
 
+    const mealPlate = new THREE.Group(); mealPlate.name = 'Held meal plate';
+    mealPlate.position.set(0, -armH + 0.05, 0.26); mealPlate.visible = false; leftArmGroup.add(mealPlate);
+    let mealDish: PlateDish | null = null;
+    const setMealDish = (dish: PlateDish = 'rice') => {
+      if (mealDish === dish) return;
+      mealPlate.traverse(object => { if (object instanceof THREE.Mesh) { object.geometry.dispose(); const mats = Array.isArray(object.material) ? object.material : [object.material]; mats.forEach(mat => { if (!mat.userData.sharedFoodMaterial) mat.dispose(); }); } });
+      mealPlate.clear(); mealPlate.add(createFoodPlate(dish)); mealDish = dish;
+    };
+    const setFoodProgress = (progress: number) => {
+      const food = mealPlate.children[0];
+      food?.children.slice(2).forEach(piece => {
+        if (piece.userData.servedScaleY === undefined) piece.userData.servedScaleY = piece.scale.y;
+        piece.scale.y = piece.userData.servedScaleY * Math.max(0.02, 1 - progress);
+        piece.visible = progress < 1;
+      });
+    };
+    const fork = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.16, 0.009), new THREE.MeshStandardMaterial({ color: 0xB8B8AA, metalness: 0.7, roughness: 0.3 }));
+    fork.position.set(0, -0.36, 0.12); fork.visible = false; fork.userData.isDynamic = true; rightArmGroup.add(fork);
     // Articulated Legs (Hip Joint -> Thigh -> Knee Joint -> Shin -> Shoe with Rubber Sole)
     const legW = isCEO ? 0.27 : 0.15;
     const legSpacingX = isCEO ? 0.24 : 0.13;
@@ -940,7 +983,8 @@ export class CharacterFactory {
       headGroup.rotation.set(0, 0, 0);
       if (seated) {
         // Keep thighs above the cushion and soles on the floor or stool footrest.
-        seatedHipHeight = seatHeight + legW * 1.05 / 2;
+        seatedHipHeight = seatHeight + legW * 1.05 / 2 * (isCEO ? 0.70 : 1);
+        leftThigh.scale.z = rightThigh.scale.z = isCEO ? 0.70 : 1;
         hipGroup.position.y = seatedHipHeight;
         const thighAngle = isBarStool ? -1.1 : isSofa ? -1.45 : -Math.PI / 2;
         const shinAngle = 0;
@@ -957,6 +1001,7 @@ export class CharacterFactory {
         leftKneeGroup.rotation.x = 0;
         rightKneeGroup.rotation.x = 0;
         leftKneeGroup.scale.y = rightKneeGroup.scale.y = 1;
+        leftThigh.scale.z = rightThigh.scale.z = 1;
       }
     };
     applySeatedPose(true, false, false);
@@ -972,9 +1017,13 @@ export class CharacterFactory {
       setSitting: (sitting: boolean, isSofa = false, isBarStool = false, seatHeight = 0.5175) => {
         applySeatedPose(sitting, isSofa, isBarStool, seatHeight);
       },
-      setHoldingProp: (prop: 'none' | 'coffee_cup' | 'snack_bar') => {
+      setMealProgress: (progress: number) => { setFoodProgress(progress); coffeeFill.position.y = 0.038 - Math.min(1, progress) * 0.06; },
+      setHoldingProp: (prop: 'none' | 'coffee_cup' | 'snack_bar' | 'meal_plate', dish?: PlateDish) => {
         cupGroup.visible = prop === 'coffee_cup';
         snackGroup.visible = prop === 'snack_bar';
+        mealPlate.visible = prop === 'meal_plate'; fork.visible = prop === 'meal_plate';
+        if (prop === 'meal_plate') { setMealDish(dish); setFoodProgress(0); }
+        if (prop === 'coffee_cup') coffeeFill.position.y = 0.038;
       },
       updateAnimation: (time: number, isMoving = false, speedMultiplier = 1.0) => {
         const animDelta = lastAnimTime === 0 ? 0.016 : Math.min(0.04, Math.max(0.005, time - lastAnimTime));
@@ -988,7 +1037,7 @@ export class CharacterFactory {
         let sipHeadAngle = 0;
         let isSipping = false;
 
-        if (cupGroup.visible) {
+        if (cupGroup.visible && isSeated) {
           const sipPeriod = 5.5; // sip every 5.5 seconds
           const sipPhase = (time + seed * 2) % sipPeriod;
           if (sipPhase < 1.1) {
@@ -1058,7 +1107,11 @@ export class CharacterFactory {
           hipGroup.rotation.set(0, 0, 0);
           hipGroup.position.y = seatedHipHeight + (1 + Math.sin(t * 1.8)) * 0.002;
 
-          if (cupGroup.visible) {
+          if (mealPlate.visible) {
+            leftArmGroup.rotation.x = -0.95;
+            rightArmGroup.rotation.x = -1.1 + Math.sin(t * 2) * 0.22;
+            headGroup.rotation.x = 0.08 + Math.sin(t * 2) * 0.025;
+          } else if (cupGroup.visible) {
             // Holding and visibly sipping coffee while seated
             rightArmGroup.rotation.x = sipArmAngle;
             headGroup.rotation.x = 0.05 + sipHeadAngle;
@@ -1123,6 +1176,12 @@ export class CharacterFactory {
         }
 
         beacon.scale.setScalar(1 + Math.sin(t * 2.5) * 0.05);
+        if (mealPlate.visible) {
+          if (!isSeated) leftArmGroup.rotation.x = -0.95;
+          mealPlate.rotation.x = -leftArmGroup.rotation.x;
+        }
+        if (cupGroup.visible && !isSeated) cupGroup.rotation.x = -rightArmGroup.rotation.x;
+        else cupGroup.rotation.x = 0;
       },
       lookAt: (target: THREE.Vector3) => {
         group.lookAt(target.x, group.position.y, target.z);

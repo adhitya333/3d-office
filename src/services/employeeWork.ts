@@ -1,11 +1,11 @@
 import { EmployeeWorkManager, workPhase, EmployeeWorkPhase } from './employeeWorkManager';
 import { StorageService } from './storage';
-import { OpenRouterService } from './openrouter';
+import { EmployeeAIService } from './employeeAI';
 import { npcBrain } from './npcBrain';
 import { SoundEffects } from './audio';
 
 const phases = new Map<string, EmployeeWorkPhase>();
-export const employeeWork = new EmployeeWorkManager(StorageService, OpenRouterService, (employeeId, snapshot) => {
+export const employeeWork = new EmployeeWorkManager(StorageService, EmployeeAIService, (employeeId, snapshot) => {
   const phase = workPhase(snapshot);
   if (phases.get(employeeId) === phase) return;
   const previous = phases.get(employeeId);

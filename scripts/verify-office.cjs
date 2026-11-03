@@ -89,6 +89,17 @@ const chassis = monitor.children.find(child => child.geometry instanceof THREE.B
 assert(display && chassis);
 assert.equal(chassis.material.map, null, 'Monitor backs must not display screen content');
 assert(display.position.z > chassis.geometry.parameters.depth / 2, 'Display must sit in front of bezel');
+const diningTop = new THREE.Box3(new THREE.Vector3(0.801, 0.711, -18.549), new THREE.Vector3(3.199, 0.789, -17.451));
+for (const seat of SITTABLE_CHAIRS.filter(seat => seat.id.startsWith('canteen_dining_'))) {
+  ameen.group.position.set(...seat.position); ameen.group.rotation.y = seat.lookDirection;
+  ameen.setSitting(true, false, false, seat.seatHeight); ameen.setHoldingProp('meal_plate', 'rice');
+  for (const time of [0, 0.8, 1.6, 2.4, 3.2]) {
+    ameen.updateAnimation(time, false); ameen.group.updateMatrixWorld(true);
+    ameen.group.traverse(mesh => {
+      if (mesh instanceof THREE.Mesh) assert(!new THREE.Box3().setFromObject(mesh).intersectsBox(diningTop), 'CEO body and food must clear the dining tabletop');
+    });
+  }
+}
 for (const config of OFFICE_CONFIG.employees) {
   const employee = CharacterFactory.createEmployeeAvatar(config);
   for (const seat of SITTABLE_CHAIRS) {

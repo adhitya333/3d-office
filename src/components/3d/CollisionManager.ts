@@ -18,12 +18,13 @@ export class CollisionManager {
     // Canteen & Lounge Perimeter Walls (X: -4.5 to 4.5, Z: -20.5 to -10.5)
     this.addBox(-4.8, -4.2, -20.5, -10.5, 'Canteen West Wall');
     this.addBox(4.2, 4.8, -20.5, -10.5, 'Canteen East Wall');
+    this.addBox(-1.4, 1.4, -10.66, -10.54, 'Canteen Entrance Sign', 2.3, 3.0);
     this.addBox(-4.8, 4.8, -21.0, -20.35, 'Canteen North Wall');
 
     // Canteen Furniture Collisions (Exact full AABBs covering entire fixtures)
     this.addBox(-3.7, -2.0, -16.25, -12.75, 'Coffee Bar Counter');
-    this.addBox(3.55, 4.30, -15.45, -13.55, 'Snack Wall Shelving');
-    this.addBox(3.0, 4.2, -18.4, -16.8, 'Canteen Fridge');
+    this.addBox(2.7, 3.7, -16.5, -12.5, 'Canteen Serving Table', 0, 1.2);
+    this.addBox(0.8, 3.2, -18.55, -17.45, 'Canteen Dining Table', 0, 0.79);
     this.addBox(-3.2, 3.2, -20.2, -19.4, 'Skyline Bar Counter');
     this.addBox(-3.6, -1.4, -18.6, -17.8, 'Lounge Sofa');
     this.addBox(-3.1, -1.9, -17.7, -16.5, 'Canteen Coffee Table');
@@ -97,7 +98,7 @@ export class CollisionManager {
 
     // Room 4: CEO Office & Boardroom
     // Ameen's Executive Presidential Boardroom Desk (4.2m x 1.8m) at [8.5, 0, -6.5]
-    this.addBox(6.3, 10.7, -7.5, -5.5, "Ameen's Executive Desk");
+    this.addBox(6.48, 10.52, -7.32, -5.68, "Ameen's Executive Desk");
     // Boardroom Conference Table at [8.5, 0, -2.5]
     this.addBox(7.1, 9.9, -3.11, -1.89, 'Boardroom Conference Table', 0, 0.80);
     // CEO Roadmap Board at East wall
@@ -143,6 +144,16 @@ export class CollisionManager {
       if (dx * dx + dz * dz < radius * radius) {
         return true;
       }
+    }
+    return false;
+  }
+
+  public isTableColliding(x: number, z: number, radius = 0.14): boolean {
+    for (const box of this.boxes) {
+      if (!/table|desk|counter/i.test(box.label || '')) continue;
+      const dx = x - Math.max(box.minX, Math.min(x, box.maxX));
+      const dz = z - Math.max(box.minZ, Math.min(z, box.maxZ));
+      if (dx * dx + dz * dz < radius * radius) return true;
     }
     return false;
   }

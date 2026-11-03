@@ -164,12 +164,13 @@ export class NavigationService {
 
   /** Infrequent local A* detour around furniture when a graph segment is obstructed. */
   public findObstacleDetour(startX: number, startZ: number, targetX: number, targetZ: number,
-    radius: number, blocked: (x: number, z: number, radius: number) => boolean, seatTarget = false): { x: number; z: number }[] | null {
+    radius: number, blocked: (x: number, z: number, radius: number) => boolean, seatTarget = false,
+    hardBlocked?: (x: number, z: number) => boolean): { x: number; z: number }[] | null {
     const spacing = 0.15;
     const startInside = blocked(startX, startZ, radius);
-    const clear = (x: number, z: number) =>
+    const clear = (x: number, z: number) => !hardBlocked?.(x, z) && (
       (startInside && Math.hypot(x - startX, z - startZ) < 0.75) ||
-      (seatTarget && Math.hypot(x - targetX, z - targetZ) < radius + 0.75) || !blocked(x, z, radius);
+      (seatTarget && Math.hypot(x - targetX, z - targetZ) < radius + 0.75) || !blocked(x, z, radius));
     const lineClear = (x1: number, z1: number, x2: number, z2: number) => {
       const count = Math.max(1, Math.ceil(Math.hypot(x2 - x1, z2 - z1) / 0.12));
       for (let i = 1; i <= count; i++) if (!clear(x1 + (x2 - x1) * i / count, z1 + (z2 - z1) * i / count)) return false;

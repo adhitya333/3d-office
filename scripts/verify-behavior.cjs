@@ -14,8 +14,8 @@ const fakeController = () => ({ group: new THREE.Group(), updateAnimation() {}, 
   setSitting(seated, sofa, bar, height) { this.seated = seated; this.seatHeight = height; }, setTalking() {}, setHoldingProp() {} });
 const brain = new NPCBrainManager();
 for (const employee of OFFICE_CONFIG.employees) brain.registerAgent(employee, fakeController());
-assert(OFFICE_CONFIG.schedule.minBreakIntervalSec >= 480);
-for (const employee of OFFICE_CONFIG.employees) assert(brain.getAgent(employee.id).breakCooldownTimer >= 480);
+assert(OFFICE_CONFIG.schedule.minBreakIntervalSec >= 90 && OFFICE_CONFIG.schedule.maxBreakIntervalSec <= 420);
+for (const employee of OFFICE_CONFIG.employees) assert(brain.getAgent(employee.id).breakCooldownTimer >= OFFICE_CONFIG.schedule.minBreakIntervalSec);
 const originalRandom = Math.random;
 Math.random = () => 0;
 const a = brain.getAgent('adhi'), b = brain.getAgent('abbu'), c = brain.getAgent('prox');
@@ -48,7 +48,7 @@ brain.clearAgents();
 
 const crowd = new NPCBrainManager();
 const crowdCollisions = new CollisionManager();
-crowd.setObstacleTest((x, z, radius) => crowdCollisions.isColliding(x, z, 0, radius));
+crowd.setObstacleTest((x, z, radius) => crowdCollisions.isColliding(x, z, 0, radius), (x,z,radius) => crowdCollisions.isTableColliding(x,z,radius));
 for (const employee of OFFICE_CONFIG.employees) crowd.registerAgent(employee, fakeController());
 crowd.triggerRandomBreak(crowd.getAgent('adhi')); crowd.triggerRandomBreak(crowd.getAgent('abbu'));
 let reachedMachine = false, reachedQueue = false;
@@ -62,13 +62,66 @@ for (let frame = 0; frame < 3600; frame++) {
 }
 crowd.clearAgents();
 
+// A called employee collects first, sits to consume, then returns; invitations
+// made during actual model work remain queued until that work is finished.
+const dining = new NPCBrainManager();
+const diningCollisions = new CollisionManager();
+dining.setObstacleTest((x,z,r) => diningCollisions.isColliding(x,z,0,r), (x,z,r) => diningCollisions.isTableColliding(x,z,r));
+for (const config of OFFICE_CONFIG.employees) { dining.registerAgent(config, fakeController()); dining.getAgent(config.id).breakCooldownTimer = 1e6; }
+Math.random = () => 0.8;
+assert.equal(dining.commandToCanteen('adhi'), 'on-way');
+assert.equal(dining.commandToCanteen('abbu'), 'on-way');
+assert.notEqual(dining.getAgent('adhi').targetPoint.id, dining.getAgent('abbu').targetPoint.id);
+assert.notEqual(dining.getAgent('adhi').reservedMealSeatId, dining.getAgent('abbu').reservedMealSeatId);
+dining.setWorkStatus('prox', 'thinking');
+assert.equal(dining.commandToCanteen('prox'), 'queued');
+const collected = new Set(), seated = new Set(), finished = new Set();
+let releasedWork = false;
+for (let frame = 0; frame < 24000; frame++) {
+  dining.update(1/60, frame/60, new THREE.Vector3(0,0,17));
+  const active = ['adhi','abbu','prox'].map(id => dining.getAgent(id));
+  for (const agent of active) {
+    if (agent.holdingProp === 'meal_plate') collected.add(agent.config.id);
+    if (agent.state === 'SITTING_IN_LOUNGE') { assert(collected.has(agent.config.id)); assert(agent.isSeated); seated.add(agent.config.id); }
+    if (seated.has(agent.config.id) && agent.state === 'AT_DESK_WORKING') { finished.add(agent.config.id); agent.breakCooldownTimer = 1e6; }
+    if (agent.state === 'WALKING_TO_BREAK' || agent.state === 'RETURNING_TO_DESK') {
+      const pos = agent.controller.group.position;
+      assert(!diningCollisions.isTableColliding(pos.x,pos.z,0.14), `${agent.config.name} must not walk through a table`);
+    }
+  }
+  for (let i=0;i<active.length;i++) for(let j=i+1;j<active.length;j++) assert(active[i].controller.group.position.distanceTo(active[j].controller.group.position) >= 0.68-1e-5, 'Canteen visitors stay separated');
+  if (!releasedWork && finished.has('adhi') && finished.has('abbu')) { assert.equal(dining.getAgent('prox').state, 'AT_DESK_WORKING'); dining.setWorkStatus('prox','idle'); releasedWork = true; }
+  if (finished.size === 3) break;
+  assert(frame < 23999, `Called canteen trips complete: ${JSON.stringify(active.map(agent => ({ id:agent.config.id,state:agent.state,pos:agent.controller.group.position,waypoint:agent.path[agent.pathIndex] })))}`);
+}
+assert.equal(finished.size, 3);
+for (const id of ['adhi','abbu','prox']) assert(!NavigationService.getInstance().isPointOccupied(`canteen_dining_${['adhi','abbu','prox'].indexOf(id)+1}`), 'Meal reservations are released');
+dining.clearAgents();
+for (const roll of [0.1, 0.8]) {
+  Math.random = () => roll;
+  const manager = new NPCBrainManager();
+  const collision = new CollisionManager();
+  manager.setObstacleTest((x,z,r) => collision.isColliding(x,z,0,r), (x,z,r) => collision.isTableColliding(x,z,r));
+  manager.registerAgent(OFFICE_CONFIG.employees.find(employee => employee.id === 'ameen'), fakeController());
+  assert.equal(manager.commandToCanteen('ameen'), 'on-way');
+  const agent = manager.getAgent('ameen'); let tookSeat = false;
+  for (let frame=0;frame<15000;frame++) {
+    manager.update(1/60, frame/60, new THREE.Vector3(0,0,17));
+    if (agent.state === 'SITTING_IN_LOUNGE') tookSeat = true;
+    if (tookSeat && agent.state === 'AT_DESK_WORKING') break;
+    assert(frame < 14999, `CEO completes a seated canteen visit: ${agent.state} ${JSON.stringify(agent.controller.group.position)}`);
+  }
+  assert(tookSeat); assert.equal(agent.holdingProp, 'none'); manager.clearAgents();
+}
+Math.random = () => 0;
+
 // Check actual waypoint paths against the scene collision boxes, including the larger CEO.
 for (const [roll, expectedState] of [[0, 'COFFEE'], [0.9, 'SNACK'], [0.5, 'SITTING_IN_LOUNGE']]) for (const config of OFFICE_CONFIG.employees) {
   Math.random = () => roll;
   const manager = new NPCBrainManager(); const controller = fakeController();
   manager.registerAgent(config, controller);
   const collision = new CollisionManager();
-  manager.setObstacleTest((x, z, radius) => collision.isColliding(x, z, 0, radius));
+  manager.setObstacleTest((x, z, radius) => collision.isColliding(x, z, 0, radius), (x,z,radius) => collision.isTableColliding(x,z,radius));
   const agent = manager.getAgent(config.id);
   manager.triggerRandomBreak(agent);
   for (let frame = 0; frame < 3600 && agent.state === 'WALKING_TO_BREAK'; frame++) manager.update(1 / 60, frame / 60, new THREE.Vector3(0, 0, 17));

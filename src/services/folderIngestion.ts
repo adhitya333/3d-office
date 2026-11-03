@@ -152,30 +152,11 @@ export class FolderIngestionService {
       return { employeeId: 'taha', category: 'Enterprise Systems & CRM/ERP' };
     }
 
-    // 6. REWU (REWAANT): Head of Growth & Outbound Pipeline
-    // Outbound sequences, cold email, leads, ICP targets, sales scripts, deliverability
-    if (
-      fullPath.includes('/outbound/') ||
-      fullPath.includes('/growth/') ||
-      fullPath.includes('/leads/') ||
-      fullPath.includes('/sales/') ||
-      fullPath.includes('/campaigns/') ||
-      fullPath.includes('/sequences/') ||
-      fullPath.includes('/email/') ||
-      fullPath.includes('/icp/') ||
-      fileName.includes('leads') ||
-      fileName.includes('cold_email') ||
-      fileName.includes('sequence') ||
-      fileName.includes('outbound') ||
-      fileName.includes('icp') ||
-      snippet.includes('cold email') ||
-      snippet.includes('outbound sequence') ||
-      snippet.includes('deliverability') ||
-      snippet.includes('open rate') ||
-      snippet.includes('decision maker') ||
-      snippet.includes('prospect list')
-    ) {
-      return { employeeId: 'rewaant', category: 'Growth & Outbound Pipeline' };
+    // 6. REWU: visual identity and creative brand assets.
+    if (['/brand/', '/branding/', '/identity/', '/creative/', '/assets/brand/'].some(part => fullPath.includes(part)) ||
+        ['logo', 'brand', 'typography', 'palette', 'identity', 'creative'].some(word => fileName.includes(word)) ||
+        snippet.includes('brand guidelines') || snippet.includes('visual identity')) {
+      return { employeeId: 'rewaant', category: 'Design & Brand Identity' };
     }
 
     // 7. AMEEN: Chief Executive Officer (CEO)
@@ -327,7 +308,7 @@ export class FolderIngestionService {
           suggestedScope = `Architect ACID-compliant table structures, webhook reconciliation, and enterprise access control.`;
           break;
         case 'rewaant':
-          summary = `Extracted ${empFiles.length} growth & outbound data files. Ready to launch cold outbound sequences and ICP targeting.`;
+          summary = `Extracted ${empFiles.length} design & brand identity files. Ready to develop visual direction and consistent brand assets.`;
           suggestedTaskTitle = `Launch B2B Outbound Campaigns & ICP Sequences for ${projectName}`;
           suggestedScope = `Build multi-touch email sequences, verify domain deliverability safeguards, and accelerate sales pipeline.`;
           break;

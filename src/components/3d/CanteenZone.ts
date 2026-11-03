@@ -1,3 +1,4 @@
+import { createFoodPlate, PlateDish } from './Food';
 import * as THREE from 'three';
 import { OfficeTextureGenerator } from './OfficeTextureGenerator';
 import { GeometryBatcher } from './GeometryBatcher';
@@ -413,74 +414,33 @@ export class CanteenZone {
     fridgeGlass.position.set(-2.8, 0.41, -12.87);
     group.add(fridgeGlass);
 
-    // ================= 5. ARTISAN SNACK & FRUIT WALL (EAST SIDE) =================
-    // Snack Shelving Unit flush against East Wall at X = 3.90, Z = -14.5, facing West into the room
-    const snackShelfGroup = new THREE.Group();
-    snackShelfGroup.position.set(3.90, 0, -14.5);
-    snackShelfGroup.rotation.y = -Math.PI / 2;
-
-    const shelfFrameMat = new THREE.MeshStandardMaterial({ color: 0x18181B, roughness: 0.4, metalness: 0.8 });
-    // Upright steel struts
-    [-0.75, 0.75].forEach(sx => {
-      [-0.22, 0.22].forEach(sz => {
-        const strut = new THREE.Mesh(new THREE.BoxGeometry(0.04, 2.2, 0.04), shelfFrameMat);
-        strut.position.set(sx, 1.1, sz);
-        snackShelfGroup.add(strut);
-      });
+    // ================= 5. RIGHT-HAND SERVING TABLE =================
+    const servingTable = new THREE.Group(); servingTable.name = 'Canteen serving table';
+    servingTable.position.set(3.2, 0, -14.5);
+    const tableTop = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.08, 4.0), quartzCounterMat);
+    tableTop.position.y = 0.90; tableTop.castShadow = true; servingTable.add(tableTop);
+    const apron = new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.12, 3.86), chromeMat);
+    apron.position.y = 0.80; servingTable.add(apron);
+    for (const x of [-0.39, 0.39]) for (const z of [-1.8, 1.8]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.83, 0.055), chromeMat);
+      leg.position.set(x, 0.415, z); servingTable.add(leg);
+    }
+    const dishes: PlateDish[] = ['rice', 'salad', 'pasta', 'sandwich', 'fruit', 'nuts'];
+    dishes.forEach((dish, index) => {
+      const plate = createFoodPlate(dish); plate.position.set(index % 2 ? 0.22 : -0.22, 0.956, -1.45 + Math.floor(index / 2) * 1.45);
+      servingTable.add(plate);
     });
-
-    // 4 Oak Shelves (1.6m wide along Z, 0.50m deep along X)
-    const shelfY = [0.4, 0.85, 1.3, 1.75];
-    shelfY.forEach((sy, idx) => {
-      const shelf = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.04, 0.50), counterWoodMat);
-      shelf.position.set(0, sy, 0);
-      shelf.castShadow = true;
-      snackShelfGroup.add(shelf);
-
-      // Stock shelves with colorful snacks, energy bars, and fruit baskets
-      if (idx === 0) {
-        // Cold sparkling water & kombucha cans on bottom shelf
-        const canMat = new THREE.MeshStandardMaterial({ color: 0x06B6D4, metalness: 0.8, roughness: 0.2 });
-        for (let cx = -0.55; cx <= 0.55; cx += 0.12) {
-          const can = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.14, 10), canMat);
-          can.position.set(cx, sy + 0.09, 0);
-          snackShelfGroup.add(can);
-        }
-      } else if (idx === 1) {
-        // Large hand-carved acacia wood fruit bowl with organic apples & oranges
-        const bowlMat = new THREE.MeshStandardMaterial({ color: 0x78350F, roughness: 0.4 });
-        const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.14, 0.09, 14), bowlMat);
-        bowl.position.set(-0.35, sy + 0.06, 0);
-        snackShelfGroup.add(bowl);
-
-        // Apples (Crimson) & Oranges (Amber)
-        const appleMat = new THREE.MeshStandardMaterial({ color: 0xDC2626, roughness: 0.3 });
-        const orangeMat = new THREE.MeshStandardMaterial({ color: 0xF97316, roughness: 0.4 });
-        [[-0.4, sy + 0.13, -0.04], [-0.3, sy + 0.13, 0.05], [-0.35, sy + 0.17, 0]].forEach((pos, i) => {
-          const fruit = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), i % 2 === 0 ? appleMat : orangeMat);
-          fruit.position.set(pos[0], pos[1], pos[2]);
-          snackShelfGroup.add(fruit);
-        });
-      } else if (idx === 2) {
-        // Healthy protein bars & organic almond packs
-        const snackPackMat = new THREE.MeshStandardMaterial({ color: 0x10B981, roughness: 0.5 });
-        for (let bx = -0.5; bx <= 0.5; bx += 0.18) {
-          const barBox = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.18), snackPackMat);
-          barBox.position.set(bx, sy + 0.05, 0);
-          snackShelfGroup.add(barBox);
-        }
-      } else {
-        // Gourmet tea tins & organic matcha cannisters
-        const tinMat = new THREE.MeshStandardMaterial({ color: 0xD97706, metalness: 0.6, roughness: 0.3 });
-        [-0.45, 0, 0.45].forEach(tx => {
-          const tin = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.16, 12), tinMat);
-          tin.position.set(tx, sy + 0.1, 0);
-          snackShelfGroup.add(tin);
-        });
-      }
-    });
-
-    group.add(snackShelfGroup);
+    const plateMat = new THREE.MeshStandardMaterial({ color: 0xEDE9DD, roughness: 0.35 });
+    for (let i = 0; i < 5; i++) {
+      const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.13, 0.018, 20), plateMat);
+      plate.position.set(0, 0.955 + i * 0.02, 0.72); servingTable.add(plate);
+    }
+    // Drinks stay available beside the meal dishes.
+    for (const z of [-0.75, 0.65]) {
+      const bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.18, 12), new THREE.MeshStandardMaterial({ color: z < 0 ? 0x8D9B67 : 0xB88A55, roughness: 0.45 }));
+      bottle.position.set(0.25, 1.035, z); servingTable.add(bottle);
+    }
+    group.add(servingTable);
 
     // ================= 6. MODERN SCANDINAVIAN SOFA LOUNGE =================
     // Sofa at X: -2.5, Z: -18.2 (Facing South, direction 0)
@@ -657,10 +617,10 @@ export class CanteenZone {
       return chair;
     };
 
-    group.add(createDiningChair(1.4, -17.2, 0));
-    group.add(createDiningChair(2.6, -17.2, 0));
-    group.add(createDiningChair(1.4, -18.8, Math.PI));
-    group.add(createDiningChair(2.6, -18.8, Math.PI));
+    group.add(createDiningChair(1.4, -17.2, Math.PI));
+    group.add(createDiningChair(2.6, -17.2, Math.PI));
+    group.add(createDiningChair(1.4, -18.8, 0));
+    group.add(createDiningChair(2.6, -18.8, 0));
 
     // ================= 9. QUIET CANTEEN MENU & ANALOG CLOCK =================
     // A static black menu replaces the animated feed. Text remains legible from the lounge.
@@ -677,9 +637,9 @@ export class CanteenZone {
     menuCtx.fillStyle = '#B9B6AF';
     menuCtx.font = '400 35px Inter, Arial, sans-serif';
     menuCtx.fillText('Coffee  ·  Cold drinks', 512, 265);
-    menuCtx.fillText('Fresh fruit  ·  Snacks', 512, 335);
+    menuCtx.fillText('Rice bowls  ·  Pasta  ·  Salads', 512, 335);
     menuCtx.font = '400 27px Inter, Arial, sans-serif';
-    menuCtx.fillText('Take a moment. Stay a while.', 512, 460);
+    menuCtx.fillText('Serving table on your right  ·  Take a plate', 512, 460);
 
     const menuTexture = new THREE.CanvasTexture(menuCanvas);
     menuTexture.colorSpace = THREE.SRGBColorSpace;

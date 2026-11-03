@@ -45,8 +45,8 @@ export const ROOMS: RoomDefinition[] = [
   },
   {
     id: 'growth',
-    name: 'Growth Studio',
-    shortName: 'Growth',
+    name: 'Brand & Design Studio',
+    shortName: 'Design',
     departmentCode: 'GRO-03',
     accentColor: '#059669', // Emerald
     glowColor: 'rgba(5, 150, 105, 0.4)',
@@ -62,7 +62,7 @@ export const ROOMS: RoomDefinition[] = [
       z: 5.2,
       width: 2.8
     },
-    description: 'High-velocity B2B outbound sequences, inbox deliverability health, ICP targeting, and enterprise sales pipeline acceleration.'
+    description: 'Brand identity, visual design, typography, creative direction and consistent brand experiences.'
   },
   {
     id: 'ceo',
