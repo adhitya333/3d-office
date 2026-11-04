@@ -1,6 +1,7 @@
 import type { EmployeeDefinition, EmployeeTask } from '../types/office';
 import type { TaskDeliverable } from '../types/integration';
 import type { ChatMessage } from './storage';
+import type { ChatImage, ChatOptions, ChatTurn } from '../types/chat';
 
 export type EmployeeWorkPhase = 'idle' | 'thinking' | 'responding' | 'working';
 export interface EmployeeWorkSnapshot {
@@ -17,7 +18,7 @@ interface WorkStorage {
   getTasksForEmployee: (id: string) => EmployeeTask[];
 }
 interface WorkTransport {
-  streamChatWithEmployee: (employee: EmployeeDefinition, history: { role: 'user' | 'assistant'; content: string }[], tasks: EmployeeTask[], onChunk: (text: string, delta: string) => void, signal?: AbortSignal) => Promise<string>;
+  streamChatWithEmployee: (employee: EmployeeDefinition, history: ChatTurn[], tasks: EmployeeTask[], onChunk: (text: string, delta: string) => void, signal?: AbortSignal, options?: ChatOptions) => Promise<string>;
   askProgressUpdate: (employee: EmployeeDefinition, task?: EmployeeTask) => Promise<string>;
   executeTask: (task: EmployeeTask, employee: EmployeeDefinition, onProgress: (status: string) => void) => Promise<TaskDeliverable>;
 }
@@ -85,28 +86,29 @@ export class EmployeeWorkManager {
   }
   public clearError(id: string) { this.update(id, { error: null }); }
 
-  public sendMessage(employee: EmployeeDefinition, text: string): Promise<void> | null {
+  public sendMessage(employee: EmployeeDefinition, text: string, options: { images?: ChatImage[]; generateImage?: boolean } = {}): Promise<void> | null {
     const state = this.getSnapshot(employee.id);
-    if (!text.trim() || state.chatStatus !== 'idle') return null;
+    const prompt = text.trim() || (options.images?.length ? 'Describe this image and extract its visible text.' : '');
+    if (!prompt || state.chatStatus !== 'idle') return null;
     this.refresh(employee.id);
     const history = this.getSnapshot(employee.id).messages
       .filter(message => !message.delivery || message.delivery === 'complete')
       .slice(-24)
-      .map(message => ({ role: message.sender === 'user' ? 'user' as const : 'assistant' as const, content: message.content }));
-    const user: ChatMessage = { id: this.id('msg-user'), employeeId: employee.id, sender: 'user', content: text.trim(), timestamp: new Date().toISOString(), delivery: 'complete' };
-    const reply: ChatMessage = { id: this.id('msg-reply'), employeeId: employee.id, sender: 'employee', content: 'Thinking…', timestamp: new Date().toISOString(), delivery: 'thinking' };
+      .map(message => ({ role: message.sender === 'user' ? 'user' as const : 'assistant' as const, content: message.content, images: message.images }));
+    const user: ChatMessage = { id: this.id('msg-user'), employeeId: employee.id, sender: 'user', content: prompt, images: options.images, timestamp: new Date().toISOString(), delivery: 'complete' };
+    const reply: ChatMessage = { id: this.id('msg-reply'), employeeId: employee.id, sender: 'employee', content: options.generateImage ? 'Creating your image…' : 'Thinking…', kind: options.generateImage ? 'image' : undefined, timestamp: new Date().toISOString(), delivery: 'thinking' };
     this.storage.saveChatMessage(user);
     this.storage.saveChatMessage(reply);
     this.update(employee.id, { messages: [...this.getSnapshot(employee.id).messages, user, reply], chatStatus: 'thinking', error: null });
-    return this.runChat(employee, [...history, { role: 'user', content: user.content }], reply);
+    return this.runChat(employee, [...history, { role: 'user', content: user.content, images: user.images }], reply);
   }
 
-  private async runChat(employee: EmployeeDefinition, history: { role: 'user' | 'assistant'; content: string }[], initialReply: ChatMessage) {
+  private async runChat(employee: EmployeeDefinition, history: ChatTurn[], initialReply: ChatMessage) {
     let reply = initialReply;
     let lastPublish = 0;
     let lastSave = 0;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 125_000);
+    const timeout = setTimeout(() => controller.abort(), initialReply.kind === 'image' ? 245_000 : 125_000);
     const publish = (text: string, force = false) => {
       reply = { ...reply, content: text, delivery: 'responding' };
       const now = Date.now();
@@ -117,7 +119,11 @@ export class EmployeeWorkManager {
       }
     };
     try {
-      const result = await this.transport.streamChatWithEmployee(employee, history, this.storage.getTasksForEmployee(employee.id), accumulated => publish(accumulated), controller.signal);
+      const result = await this.transport.streamChatWithEmployee(employee, history, this.storage.getTasksForEmployee(employee.id), accumulated => publish(accumulated), controller.signal, {
+        purpose: initialReply.kind === 'image' ? 'image' : 'chat',
+        onModel: model => { reply = { ...reply, model }; },
+        onImages: images => { reply = { ...reply, images }; this.storage.saveChatMessage(reply); this.update(employee.id, { messages: this.getSnapshot(employee.id).messages.map(message => message.id === reply.id ? reply : message) }); },
+      });
       if (!result.trim()) throw new Error('The reply was empty. Please try again.');
       reply = { ...reply, content: result, delivery: 'complete' };
       this.storage.saveChatMessage(reply);

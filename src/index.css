@@ -95,16 +95,16 @@ button:focus-visible, a:focus-visible {
 }
 
 @media (max-height: 500px) and (orientation: landscape) {
-  .employee-panel { height: 96dvh; }
-  .employee-panel-header { padding: .45rem 1rem; }
+  .employee-panel[role="dialog"] { height: 96dvh; }
+  .employee-panel .employee-panel-header { padding: .45rem 1rem; }
   .employee-panel-header > div:first-child > div:first-child { width: 2rem; height: 2rem; }
   .employee-panel-header h2 { font-size: 1rem; }
   .employee-panel-header p { font-size: 11px; }
   .employee-panel-tabs > button { padding: .45rem .8rem; font-size: 12px; }
-  .employee-panel-body { padding: .4rem; }
+  .employee-panel .employee-panel-body { padding: .4rem; }
   .employee-chat-shell { min-height: 160px; }
-  .employee-chat-toolbar { padding: .35rem .6rem; }
-  .employee-chat-composer { padding: .4rem; }
+  .employee-panel .employee-chat-toolbar { padding: .35rem .6rem; }
+  .employee-panel .employee-chat-composer { padding: .4rem; }
   .employee-chat-composer input, .employee-chat-composer > button { padding-top: .45rem; padding-bottom: .45rem; }
 }
 

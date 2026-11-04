@@ -199,13 +199,13 @@ export const FloorplanFallback2D: React.FC<FloorplanFallback2DProps> = ({
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                   GWS-03
                 </span>
-                <h2 className="text-lg font-bold text-white">Room 3 — Growth Studio</h2>
+                <h2 className="text-lg font-bold text-white">Room 3 — Brand & Design Studio</h2>
               </div>
               <span className="text-xs text-emerald-300 font-medium">1 Personnel</span>
             </div>
 
             <p className="text-xs text-slate-400">
-              Multi-channel outbound campaigns, paid acquisition funnels, and B2B pipeline conversion velocity.
+              Brand strategy, visual identity, typography, color systems and creative direction.
             </p>
 
             <div className="space-y-3">
@@ -242,7 +242,7 @@ export const FloorplanFallback2D: React.FC<FloorplanFallback2DProps> = ({
             </div>
 
             <div className="p-3 bg-emerald-950/30 rounded-xl border border-emerald-900/40 text-xs text-emerald-300/80">
-              Includes: Marketing Campaign Board & Real-Time Lead Pipeline Display.
+              Includes: Creative workstations, brand reference displays and studio seating.
             </div>
           </div>
         </div>

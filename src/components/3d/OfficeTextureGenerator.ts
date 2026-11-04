@@ -16,6 +16,24 @@ export class OfficeTextureGenerator {
   private static parquetTex: THREE.CanvasTexture | null = null;
   private static walnutMarbleTex: THREE.CanvasTexture | null = null;
   private static faceCache: Map<string, THREE.CanvasTexture> = new Map();
+  private static carpetCache = new Map<string, THREE.CanvasTexture>();
+
+  public static getCarpetTileTexture(base: string, accent: string): THREE.CanvasTexture {
+    const key = `${base}:${accent}`;
+    if (this.carpetCache.has(key)) return this.carpetCache.get(key)!;
+    const canvas = document.createElement('canvas'); canvas.width = canvas.height = 512;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = base; ctx.fillRect(0, 0, 512, 512);
+    for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+      ctx.fillStyle = accent; ctx.globalAlpha = (x + y) % 3 === 0 ? 0.24 : 0.08; ctx.fillRect(x * 64 + 2, y * 64 + 2, 60, 60);
+      ctx.globalAlpha = 0.12; ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 0.8;
+      for (let line = 0; line < 14; line++) { ctx.beginPath(); if ((x + y) % 2) { ctx.moveTo(x * 64 + line * 4.5, y * 64 + 2); ctx.lineTo(x * 64 + line * 4.5, y * 64 + 61); } else { ctx.moveTo(x * 64 + 2, y * 64 + line * 4.5); ctx.lineTo(x * 64 + 61, y * 64 + line * 4.5); } ctx.stroke(); }
+    }
+    ctx.globalAlpha = 1;
+    const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping; texture.repeat.set(3, 3); texture.anisotropy = 8;
+    this.carpetCache.set(key, texture); return texture;
+  }
 
   /**
    * Generates a warm natural oak wood plank floor texture (matching the user's reference photo)

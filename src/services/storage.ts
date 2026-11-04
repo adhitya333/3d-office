@@ -1,6 +1,7 @@
 import { EmployeeTask, Project, EmployeeActivityLog } from '../types/office';
 import { TaskDeliverable } from '../types/integration';
 import { DEFAULT_PROJECTS } from '../data/defaultProjects';
+import type { ChatImage } from '../types/chat';
 
 const STORAGE_KEYS = {
   TASKS: 'verlyn_hq_tasks_v1',
@@ -20,6 +21,9 @@ export interface ChatMessage {
   isTaskAction?: boolean;
   taskId?: string;
   delivery?: 'thinking' | 'responding' | 'complete' | 'failed' | 'interrupted';
+  images?: ChatImage[];
+  kind?: 'image';
+  model?: string;
 }
 
 export interface AppSettings {

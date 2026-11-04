@@ -60,12 +60,13 @@ export const EmployeeDirectoryModal: React.FC<EmployeeDirectoryModalProps> = ({
             <div>
               <h2 className="text-xl font-bold tracking-tight text-white">Verlyn Tech — Employee Directory</h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                All 7 specialized personnel across the 4 department rooms. Open any profile to assign tasks or review credentials.
+                Seven employees across four studios. Open a conversation to share a brief, review work or choose a model.
               </p>
             </div>
           </div>
 
           <button
+            aria-label="Close directory"
             onClick={() => {
               onClose();
               SoundEffects.playCloseModal();
@@ -141,7 +142,7 @@ export const EmployeeDirectoryModal: React.FC<EmployeeDirectoryModalProps> = ({
 
         {/* Footer */}
         <div className="p-4 border-t border-slate-800 bg-slate-900/60 flex items-center justify-between text-xs text-slate-400">
-          <span>7 Active Team Roles Registered • Ready for Phase 2 Tool Integration</span>
+          <span>7 employees · Separate conversations and saved work</span>
           <button
             onClick={() => {
               onClose();

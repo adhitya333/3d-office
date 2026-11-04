@@ -102,6 +102,9 @@ for (const seat of SITTABLE_CHAIRS.filter(seat => seat.id.startsWith('canteen_di
 }
 for (const config of OFFICE_CONFIG.employees) {
   const employee = CharacterFactory.createEmployeeAvatar(config);
+  let hairstyle;
+  employee.group.traverse(part => { if (part.userData.hairstyle) hairstyle = part; });
+  assert(hairstyle && hairstyle.children.length > 0, `${config.name}: hairstyle must survive geometry batching`);
   for (const seat of SITTABLE_CHAIRS) {
     employee.setSitting(true, seat.kind === 'sofa', seat.kind === 'bar_stool', seat.seatHeight);
     employee.group.updateMatrixWorld(true);

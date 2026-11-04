@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { EmployeeProfileConfig } from '../../config/office.config';
 import { OfficeTextureGenerator } from './OfficeTextureGenerator';
 import { GeometryBatcher } from './GeometryBatcher';
+import { ROOM_DESIGNS } from '../../data/roomDesign';
 
 export interface DeskStationController {
   group: THREE.Group;
@@ -257,15 +258,16 @@ export class DeskFactory {
     station.rotation.y = emp.deskRotation;
 
     const isCEO = emp.id === 'ameen';
+    const palette = ROOM_DESIGNS[emp.departmentId as keyof typeof ROOM_DESIGNS] || ROOM_DESIGNS['web-search'];
 
     // Materials
     const chromeMat = new THREE.MeshStandardMaterial({ color: 0xF1F5F9, roughness: 0.1, metalness: 0.95 });
     const blackSteelMat = new THREE.MeshStandardMaterial({ color: 0x18181B, roughness: 0.35, metalness: 0.85 });
-    const woodTimberMat = new THREE.MeshStandardMaterial({ color: 0xB58E62, roughness: 0.35, metalness: 0.05 });
-    const charcoalMat = new THREE.MeshStandardMaterial({ color: 0x1E293B, roughness: 0.3, metalness: 0.2 });
-    const walnutMat = new THREE.MeshStandardMaterial({ color: 0x3E2723, roughness: 0.25, metalness: 0.1 });
+    const woodTimberMat = new THREE.MeshStandardMaterial({ color: palette.wood, roughness: 0.45, metalness: 0.02 });
+    const charcoalMat = new THREE.MeshStandardMaterial({ color: palette.dark, roughness: 0.55, metalness: 0.12 });
+    const walnutMat = new THREE.MeshStandardMaterial({ color: palette.wood, roughness: 0.42, metalness: 0.03 });
     const glassMat = new THREE.MeshStandardMaterial({ color: 0xBAE6FD, transparent: true, opacity: 0.5, roughness: 0.05, metalness: 0.1 });
-    const goldMat = new THREE.MeshStandardMaterial({ color: 0xF59E0B, roughness: 0.2, metalness: 0.9 });
+    const goldMat = new THREE.MeshStandardMaterial({ color: palette.metal, roughness: 0.35, metalness: 0.65 });
 
     // Screen texture
     const screenTex = this.getScreenTexture(emp.id, `${emp.name} — ${emp.role}`, emp.deskStyle.boardTitle, emp.deskStyle.monitorType);
@@ -279,6 +281,9 @@ export class DeskFactory {
       deskTop.castShadow = true;
       deskTop.receiveShadow = true;
       station.add(deskTop);
+
+      const writingSurface = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.012, 1.12), new THREE.MeshStandardMaterial({ map: OfficeTextureGenerator.getWhiteMarbleTexture(), color: palette.stone, roughness: 0.32 }));
+      writingSurface.position.set(0, 0.836, 0); station.add(writingSurface);
 
       // Gold Inlay Perimeter Trim
       const goldTrim = new THREE.Mesh(new THREE.BoxGeometry(4.04, 0.025, 1.64), goldMat);

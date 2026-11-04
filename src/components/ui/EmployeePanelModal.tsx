@@ -31,7 +31,8 @@ import {
   Bot,
   Crown,
   Globe,
-  FileCode
+  FileCode,
+  ImagePlus
 } from 'lucide-react';
 import { EmployeeDefinition, EmployeeTask, Project } from '../../types/office';
 import { TaskDeliverable } from '../../types/integration';
@@ -41,6 +42,8 @@ import { SoundEffects } from '../../services/audio';
 import { npcBrain } from '../../services/npcBrain';
 import { employeeWork } from '../../services/employeeWork';
 import { useEmployeeWork } from '../../hooks/useEmployeeWork';
+import type { ChatImage } from '../../types/chat';
+import { modelLabel } from '../../services/modelLabels';
 
 interface EmployeePanelModalProps {
   employee: EmployeeDefinition;
@@ -61,6 +64,8 @@ type SavedPanelState = {
   taskTitle?: string;
   priority?: 'low' | 'medium' | 'high' | 'urgent';
   formData?: Record<string, any>;
+  images?: ChatImage[];
+  generateImage?: boolean;
 };
 
 const panelStateKey = (id: string) => `verlyn_employee_panel_${id}_v1`;
@@ -99,6 +104,11 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
   const work = useEmployeeWork(employee.id);
   const chatMessages = work.messages;
   const [chatInput, setChatInput] = useState<string>(() => readPanelState(employee.id).draft || '');
+  const [chatImages, setChatImages] = useState<ChatImage[]>(() => (readPanelState(employee.id).images || []).slice(0, 3));
+  const [generateImage, setGenerateImage] = useState(() => readPanelState(employee.id).generateImage === true);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const isSendingChat = work.chatStatus !== 'idle';
   const isRequestingUpdate = work.isRequestingUpdate;
   const chatScrollRef = useRef<HTMLDivElement>(null);
@@ -106,15 +116,16 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
   const followChatRef = useRef(true);
   const lastChatElementRef = useRef<HTMLDivElement | null>(null);
 
-  // Antigravity connection
+  // Official local provider connections
   const [isConfigured, setIsConfigured] = useState<boolean>(EmployeeAIService.isConfigured());
   const [showConnectionModal, setShowConnectionModal] = useState<boolean>(false);
   const [officePassword, setOfficePassword] = useState<string>('');
   const [checkingConnection, setCheckingConnection] = useState(false);
+  const [, setConnectionVersion] = useState(0);
   const [canteenNotice, setCanteenNotice] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   useEffect(() => {
-    const update = () => setIsConfigured(EmployeeAIService.isConfigured());
+    const update = () => { setIsConfigured(EmployeeAIService.isConfigured()); setConnectionVersion(version => version + 1); };
     window.addEventListener('office-ai-connection', update);
     void EmployeeAIService.refreshConnection(true);
     return () => window.removeEventListener('office-ai-connection', update);
@@ -323,7 +334,9 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
 
   // Requests are owned by the app service and survive this panel being closed.
   const handleSendChat = async (customText?: string) => {
-    const job = employeeWork.sendMessage(employee, (customText || chatInput).trim());
+    if (uploadingImage) return;
+    const job = employeeWork.sendMessage(employee, (customText || chatInput).trim(), { images: chatImages, generateImage });
+    if (job) { setChatImages([]); savePanelState(employee.id, { images: [] }); setImageError(null); }
     if (!job) return;
     setChatInput('');
     SoundEffects.playOpenModal();
@@ -357,7 +370,7 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
         assignedVia: 'Live Interactive Chat Session',
         projectScope: `Formulated directly from chat discussion with ${employee.name}`
       },
-      notes: `Queued and executed via chat with ${EmployeeAIService.getModel()}`
+      notes: `Queued and executed via chat with ${EmployeeAIService.getConfig(employee.id).taskModel}`
     };
 
     StorageService.saveTask(newTask);
@@ -409,7 +422,7 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
       updatedAt: new Date().toISOString(),
       briefDetails: { ...formData },
       notes: executeImmediately
-        ? `Queued for immediate execution via ${EmployeeAIService.getModel()}`
+        ? `Queued for immediate execution via ${EmployeeAIService.getConfig(employee.id).taskModel}`
         : 'Assignment saved and queued in registry.'
     };
 
@@ -482,7 +495,9 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
     }
   };
 
-  const configuredModel = EmployeeAIService.getModel();
+  const configuredModel = EmployeeAIService.getModel(employee.id);
+  const employeeModel = EmployeeAIService.getEmployeeModel(employee.id);
+  const providers = EmployeeAIService.getProviders();
 
   return (
     <div
@@ -519,10 +534,10 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
                   <button
                     onClick={() => setShowConnectionModal(true)}
                     className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-full text-[11px] font-medium text-[#a9c6b0] border border-[#42594d] hover:bg-[#273a31]"
-                    title={`Antigravity · ${configuredModel}. Open connection settings`}
+                    title={`${employeeModel?.provider || 'AI'} · ${modelLabel(configuredModel)}. Open connection settings`}
                   >
                     <span className="w-1.5 h-1.5 rounded-full bg-[#8fc29c]" />
-                    <span>Antigravity connected</span>
+                    <span>{modelLabel(configuredModel)}</span>
                   </button>
                 ) : (
                   <button
@@ -678,6 +693,11 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
                           {fromUser ? 'You' : employee.name} · {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </div>
                         {message.content}
+                        {message.model && !fromUser && <p className="mt-2 text-[10px] text-[#9BACAA]">{modelLabel(message.model)}</p>}
+                        {message.images?.length ? <div className="mt-3 grid gap-3">{message.images.filter(image => /^\/api\/media\/[a-f0-9]{32}$/.test(image.url)).map(image => <figure key={image.id} className="overflow-hidden rounded-lg border border-[#465157] bg-[#11171a]">
+                          <a href={image.url} target="_blank" rel="noreferrer" aria-label={`Open ${image.name}`}><img src={image.url} alt={image.name} loading="lazy" decoding="async" className="w-full max-h-80 object-contain" /></a>
+                          <figcaption className="flex items-center justify-between gap-3 px-3 py-2 text-[11px] text-[#b8c5c0]"><span className="truncate">{image.name}</span><a href={image.url} download={`verlyn-${image.id}.${image.mime === 'image/png' ? 'png' : image.mime === 'image/webp' ? 'webp' : 'jpg'}`} className="shrink-0 text-[#d8c398] hover:underline">Download</a></figcaption>
+                        </figure>)}</div> : null}
                         {message.isTaskAction && (
                           <button onClick={() => setActiveTab('deliverables')} className="block mt-2 text-xs text-[#d5be91] hover:underline">View results</button>
                         )}
@@ -687,27 +707,45 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
                 })}
                 {(isSendingChat || executingTaskId) && (
                   <p className="text-xs text-[#aeb9bd] px-1" role="status">
-                    {executingTaskId ? executionStatus || 'Working on task…' : `${employee.name} is ${work.chatStatus === 'thinking' ? 'thinking' : 'responding'}…`}
+                    {executingTaskId ? executionStatus || 'Working on task…' : work.messages[work.messages.length - 1]?.kind === 'image' && work.chatStatus === 'thinking' ? `${employee.name} is creating your image…` : `${employee.name} is ${work.chatStatus === 'thinking' ? 'thinking' : 'responding'}…`}
                   </p>
                 )}
               </div>
-              <div className="employee-chat-composer shrink-0 p-2.5 sm:p-3 bg-[#192126] border-t border-[#303940] flex items-center gap-2">
+              <div className="employee-chat-composer shrink-0 p-2.5 sm:p-3 bg-[#192126] border-t border-[#303940]">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" multiple className="hidden" aria-label="Attach reference images" onChange={async event => {
+                    const files = Array.from(event.currentTarget.files || []).slice(0, 3 - chatImages.length); event.currentTarget.value = '';
+                    if (!files.length) return; setUploadingImage(true); setImageError(null);
+                    const next = [...chatImages];
+                    try { for (const file of files) { next.push(await EmployeeAIService.uploadImage(employee.id, file)); savePanelState(employee.id, { images: next }); } setChatImages(next); }
+                    catch (error) { setChatImages(next); setImageError(error instanceof Error ? error.message : 'Could not attach this image.'); }
+                    finally { setUploadingImage(false); }
+                  }} />
+                  <button type="button" disabled={uploadingImage || isSendingChat || chatImages.length >= 3} onClick={() => imageInputRef.current?.click()} className="flex items-center gap-1.5 text-[11px] font-medium text-[#c8d2cb] hover:text-white disabled:opacity-40"><ImagePlus className="w-3.5 h-3.5" />{uploadingImage ? 'Attaching…' : 'Attach image'}</button>
+                  <select aria-label="Response type" value={generateImage ? 'image' : 'chat'} onChange={event => { const next = event.target.value === 'image'; setGenerateImage(next); savePanelState(employee.id, { generateImage: next }); }} disabled={isSendingChat} className="max-w-[55%] rounded-md bg-[#263237] border border-[#465157] px-2 py-1 text-[11px] text-[#e0e6df]">
+                    <option value="chat">Chat / read image</option><option value="image">Create image</option>
+                  </select>
+                </div>
+                {chatImages.length > 0 && <div className="flex gap-2 mb-2">{chatImages.map(image => <div key={image.id} className="relative w-14 h-12 rounded-md border border-[#576960] overflow-hidden"><img src={image.url} alt={image.name} className="w-full h-full object-cover" /><button type="button" aria-label={`Remove ${image.name}`} onClick={() => { const next = chatImages.filter(item => item.id !== image.id); setChatImages(next); savePanelState(employee.id, { images: next }); }} className="absolute right-0 top-0 bg-[#11171a]/90 text-white p-0.5"><X className="w-3 h-3" /></button></div>)}</div>}
+                {imageError && <p role="alert" className="mb-2 text-xs text-rose-300">{imageError}</p>}
+                <div className="flex items-center gap-2">
                 <input
                   type="text"
                   value={chatInput}
                   onChange={event => setChatInput(event.target.value)}
                   onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); followChatRef.current = true; handleSendChat(); } }}
-                  placeholder={`Message ${employee.name}`}
+                  placeholder={generateImage ? 'Describe the image to create…' : chatImages.length ? 'Ask about the image or extract its text…' : `Message ${employee.name}`}
                   aria-label={`Message ${employee.name}`}
                   className="min-w-0 flex-1 bg-[#11171a] border border-[#465157] rounded-lg px-3 py-2.5 text-sm text-[#f3f1eb] placeholder-[#99a5a9] focus:outline-none focus:border-[#bda779]"
                 />
                 <button
                   onClick={() => { followChatRef.current = true; handleSendChat(); }}
-                  disabled={!chatInput.trim() || isSendingChat}
+                  disabled={(!chatInput.trim() && !chatImages.length) || isSendingChat || uploadingImage}
                   className="px-3.5 py-2.5 rounded-lg bg-[#baa477] hover:bg-[#d0b98a] disabled:opacity-40 text-[#171c1e] font-semibold text-xs flex items-center gap-1.5"
                 >
                   <Send className="w-3.5 h-3.5" /> Send
                 </button>
+                </div>
               </div>
             </div>
           )}
@@ -883,7 +921,7 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
         </div>
       )}
 
-      {/* ANTIGRAVITY CONNECTION SETTINGS */}
+      {/* PROVIDER CONNECTION SETTINGS */}
       {showConnectionModal && (
         <div
           className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
@@ -900,11 +938,12 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
                 </div>
                 <div>
                   <h3 className="font-bold text-white text-base">AI connection</h3>
-                  <p className="text-xs text-slate-400">Antigravity · Gemini 3.8 Flash for all employees</p>
+                  <p className="text-xs text-slate-400">ChatGPT for GPT · Antigravity for Gemini</p>
                 </div>
               </div>
               <button
                 onClick={() => setShowConnectionModal(false)}
+                aria-label="Close connection settings"
                 className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
               >
                 <X className="w-5 h-5" />
@@ -917,7 +956,7 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
                 <div className="grid grid-cols-2 gap-2 text-[11px]">
                   <div>
                     <span className="text-slate-500 block">Model:</span>
-                    <span className="font-mono text-emerald-300">{configuredModel}</span>
+                    <span className="text-emerald-300">{modelLabel(configuredModel)}</span>
                   </div>
                   <div>
                     <span className="text-slate-500 block">Connection:</span>
@@ -930,28 +969,44 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
                     </span>
                   </div>
                 </div>
+                <label className="block pt-2 text-slate-200">Model for {employee.name}
+                  <select aria-label={`Model for ${employee.name}`} value={configuredModel} disabled={checkingConnection || isSendingChat || !EmployeeAIService.getAvailableModels().length} onChange={async event => {
+                    setCheckingConnection(true); setConnectionError(null);
+                    try { await EmployeeAIService.setEmployeeModel(employee.id,event.target.value); }
+                    catch(error) { setConnectionError(error instanceof Error ? error.message : 'Could not save model.'); }
+                    finally { setCheckingConnection(false); }
+                  }} className="mt-1.5 w-full bg-[#202B30] border border-[#50625D] rounded-lg px-3 py-2 text-[#E8EBE3] disabled:opacity-50">
+                    {EmployeeAIService.getAvailableModels().map(model=><option key={model} value={model}>{modelLabel(model)}</option>)}
+                  </select>
+                </label>
+                {employeeModel?.fallback && <p className="text-amber-200">{modelLabel(employeeModel.preferredModel)} is unavailable. Currently using {modelLabel(configuredModel)}.</p>}
+                <p className="text-[11px] text-slate-400">Images use {modelLabel(employeeModel?.imageModel)}. Model choices stay saved for each employee.</p>
               </div>
 
               <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 text-xs text-slate-300 space-y-2">
-                <p className="font-semibold text-white">Private backend connection</p>
-                <p>All employees use the official Antigravity CLI and their own SKILL.md. Quick chat uses Gemini 3.8 Flash with low reasoning; full tasks keep medium reasoning.</p>
-                <p>Google sign-in stays in Antigravity’s official client and private credential storage. This website never asks for your Google password.</p>
+                <p className="font-semibold text-white">Connected accounts</p>
+                <p>Each employee keeps their own role and conversation. GPT uses your ChatGPT sign-in; Gemini and image creation use Antigravity. Account limits apply.</p>
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <span className={providers.chatgpt?.configured ? 'text-emerald-300' : 'text-amber-300'}>ChatGPT: {providers.chatgpt?.configured ? 'Connected' : 'Sign-in needed'}</span>
+                  <span className={providers.antigravity?.configured ? 'text-emerald-300' : 'text-amber-300'}>Antigravity: {providers.antigravity?.configured ? 'Connected' : 'Sign-in needed'}</span>
+                </div>
                 <div className="flex flex-wrap gap-2 pt-2">
+                  <button type="button" disabled={checkingConnection} onClick={async()=>{setCheckingConnection(true);setConnectionError(null);try{const result=await EmployeeAIService.signInChatGPT();if(result.alreadyConnected)await EmployeeAIService.refreshConnection(true);else setConnectionError('Complete the official ChatGPT sign-in, then click Check connection.');}catch(error){setConnectionError(error instanceof Error?error.message:'Could not open ChatGPT sign-in.');}finally{setCheckingConnection(false);}}} className="rounded-lg border border-[#566850] px-3 py-2 text-[#cddbc8] disabled:opacity-50">Sign in with ChatGPT</button>
                   <button type="button" disabled={checkingConnection} onClick={async () => { setCheckingConnection(true); setConnectionError(null); try { const result = await EmployeeAIService.signInAntigravity(); if (result.alreadyConnected) { setIsConfigured(true); setConnectionError(null); } else setConnectionError('Complete sign-in in the official Antigravity window, then click Check connection.'); } catch(error) { setConnectionError(error instanceof Error ? error.message : 'Could not open Antigravity.'); } finally { setCheckingConnection(false); } }} className="rounded-lg border border-[#566850] px-3 py-2 text-[#cddbc8] disabled:opacity-50">Open Antigravity sign-in</button>
                   <button type="button" disabled={checkingConnection} onClick={async () => { setCheckingConnection(true); setConnectionError(null); try { await EmployeeAIService.checkAntigravity(); setIsConfigured(true); } catch(error) { setConnectionError(error instanceof Error ? error.message : 'Connection failed.'); } finally { setCheckingConnection(false); } }} className="rounded-lg bg-[#baa477] text-[#171c1e] px-3 py-2 disabled:opacity-50">{checkingConnection ? 'Checking…' : 'Check connection'}</button>
                 </div>
-                <p className="pt-2 text-[11px] text-slate-400">Sharing this office over a network? Unlock this website with its separate office access password below.</p>
+                {EmployeeAIService.requiresOfficeLogin() && <p className="pt-2 text-[11px] text-slate-400">Unlock this shared office with its separate access password below.</p>}
               </div>
               <div className="space-y-2 pt-1">
                 {connectionError && <p role="alert" className="text-rose-300">{connectionError}</p>}
                 <form onSubmit={handleOfficeLogin} className="space-y-3">
-                  <input
+                  {EmployeeAIService.requiresOfficeLogin() && <input
                     type="password"
                     value={officePassword}
                     onChange={e => setOfficePassword(e.target.value)}
                     placeholder="Office access password" aria-label="Office access password" autoComplete="current-password"
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 font-mono"
-                  />
+                  />}
 
                   <div className="flex items-center justify-between pt-1">
                     {isConfigured && EmployeeAIService.requiresOfficeLogin() && (
@@ -974,13 +1029,13 @@ export const EmployeePanelModal: React.FC<EmployeePanelModalProps> = ({
                       >
                         Cancel
                       </button>
-                      <button
+                      {EmployeeAIService.requiresOfficeLogin() && <button
                         type="submit"
                         disabled={!officePassword.trim()}
                         className="px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-xs text-white font-semibold shadow"
                       >
                         Connect securely
-                      </button>
+                      </button>}
                     </div>
                   </div>
                 </form>

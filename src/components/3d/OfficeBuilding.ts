@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { ROOMS } from '../../data/rooms';
 import { OfficeTextureGenerator } from './OfficeTextureGenerator';
 import { GeometryBatcher } from './GeometryBatcher';
+import { ROOM_DESIGNS } from '../../data/roomDesign';
 
 export class OfficeBuilding {
   public group: THREE.Group;
@@ -19,6 +20,7 @@ export class OfficeBuilding {
     this.buildExteriorPlazaAndFacade();
     this.buildModernCeilingAndLighting();
     this.buildBrandFeatureWalls();
+    this.buildRoomInteriors();
 
     // Consolidate static geometry batches into single meshes
     this.batcher.buildMeshes(this.group, { castShadow: true, receiveShadow: true });
@@ -37,9 +39,7 @@ export class OfficeBuilding {
     });
 
     this.materials['floor-ai'] = new THREE.MeshStandardMaterial({
-      color: 0x39434A,
-      roughness: 0.7,
-      metalness: 0.08
+      map: OfficeTextureGenerator.getCarpetTileTexture('#657780', '#BEC6C6'), roughness: 0.95
     });
 
     this.materials['floor-growth'] = new THREE.MeshStandardMaterial({
@@ -48,9 +48,7 @@ export class OfficeBuilding {
     });
 
     this.materials['floor-ceo'] = new THREE.MeshStandardMaterial({
-      map: OfficeTextureGenerator.getWalnutMarbleTexture(),
-      roughness: 0.28,
-      metalness: 0.15
+      map: OfficeTextureGenerator.getCarpetTileTexture('#6D6B62', '#B4A17D'), roughness: 0.95
     });
 
     // High quality architectural materials
@@ -248,15 +246,15 @@ export class OfficeBuilding {
   private buildWalls() {
     const wallHeight = 3.2; // Full room height: each studio is an enclosed separate room!
 
-    const addWall = (minX: number, maxX: number, minZ: number, maxZ: number, height = wallHeight) => {
+    const addWall = (minX: number, maxX: number, minZ: number, maxZ: number, height = wallHeight, baseY = 0) => {
       const width = Math.max(0.1, maxX - minX);
       const depth = Math.max(0.1, maxZ - minZ);
       const centerX = (minX + maxX) / 2;
       const centerZ = (minZ + maxZ) / 2;
 
-      this.batcher.addBox([width, height, depth], [centerX, height / 2, centerZ], this.materials['wall']);
-      this.batcher.addBox([width + 0.04, 0.12, depth + 0.04], [centerX, 0.06, centerZ], this.materials['wallTrim']);
-      this.batcher.addBox([width + 0.04, 0.08, depth + 0.04], [centerX, height - 0.04, centerZ], this.materials['wallTrim']);
+      this.batcher.addBox([width, height, depth], [centerX, baseY + height / 2, centerZ], this.materials['wall']);
+      this.batcher.addBox([width + 0.04, 0.12, depth + 0.04], [centerX, baseY + 0.06, centerZ], this.materials['wallTrim']);
+      this.batcher.addBox([width + 0.04, 0.08, depth + 0.04], [centerX, baseY + height - 0.04, centerZ], this.materials['wallTrim']);
     };
 
     // ================= 1. OUTER PERIMETER WALLS (Covering the outer sides of all rooms) =================
@@ -271,15 +269,24 @@ export class OfficeBuilding {
     addWall(4.35, 4.65, -20.5, -10.5);
     // North wall with panoramic skyline window sill & header
     addWall(-4.5, 4.5, -20.65, -20.35, 0.9); // Low window sill
-    addWall(-4.5, 4.5, -20.65, -20.35, 0.4); // Top transom header
+    addWall(-4.5, 4.5, -20.65, -20.35, 0.4, 2.8); // Top transom header
     // South connecting segments flanking the Canteen entrance doorway
     addWall(-4.5, -1.8, -10.65, -10.35);
     addWall(1.8, 4.5, -10.65, -10.35);
 
     // West outer wall (X = -14.5, Z from -10.5 to 10.5)
-    addWall(-14.65, -14.35, -10.5, 10.5);
+    const windowWall = (x: number) => {
+      for (const center of [-5.2, 5.2]) {
+        const start = center < 0 ? -10.5 : 0.15, end = center < 0 ? -0.15 : 10.5;
+        addWall(x - 0.15, x + 0.15, start, center - 3.25);
+        addWall(x - 0.15, x + 0.15, center + 3.25, end);
+        addWall(x - 0.15, x + 0.15, center - 3.25, center + 3.25, 0.8);
+        addWall(x - 0.15, x + 0.15, center - 3.25, center + 3.25, 0.8, 2.4);
+      }
+    };
+    windowWall(-14.5);
     // East outer wall (X = 14.5, Z from -10.5 to 10.5)
-    addWall(14.35, 14.65, -10.5, 10.5);
+    windowWall(14.5);
 
     // South outer walls (flanking the open front entrance at X: -1.8 to 1.8)
     // Left Wing South wall (enclosing AI Lab)
@@ -309,6 +316,44 @@ export class OfficeBuilding {
     addWall(2.25, 2.55, 6.6, 10.5);   // South segment
   }
 
+  private buildRoomInteriors() {
+    for (const room of ROOMS) {
+      const palette = ROOM_DESIGNS[room.id as keyof typeof ROOM_DESIGNS];
+      if (!palette) continue;
+      const paint = new THREE.MeshStandardMaterial({ color: palette.wall, roughness: 0.92 });
+      const accent = new THREE.MeshStandardMaterial({ color: palette.accent, roughness: 0.88 });
+      const wood = new THREE.MeshStandardMaterial({ color: palette.wood, roughness: 0.6 });
+      const metal = new THREE.MeshStandardMaterial({ color: palette.metal, roughness: 0.4, metalness: 0.55 });
+      const glow = new THREE.MeshBasicMaterial({ color: '#F5E9D1', toneMapped: false });
+      if (room.id === 'canteen') {
+        for (const side of [-1,1]) this.batcher.addBox([0.022, 3.05, 9.5], [side * 4.34, 1.6, -15.5], paint);
+        this.batcher.addBox([0.025, 0.03, 8.4], [4.31, 2.83, -15.4], glow);
+        continue;
+      }
+      const cx = room.id === 'web-search' || room.id === 'ai-systems' ? -8.4 : 8.4;
+      const north = room.id === 'web-search' || room.id === 'ceo';
+      const outerZ = north ? -10.35 : 10.35, dividerZ = north ? -0.166 : 0.166;
+      this.batcher.addBox([11.65, 3.02, 0.02], [cx, 1.61, outerZ], paint);
+      this.batcher.addBox([11.65, 3.02, 0.02], [cx, 1.61, dividerZ], paint);
+      // Wall-mounted finishes add no obstacles to circulation or seat approaches.
+      const inset = north ? 0.055 : -0.055;
+      const featureX = room.id === 'ceo' ? 12.5 : room.id === 'web-search' ? -12.8 : room.id === 'ai-systems' ? -4.8 : 4.8;
+      this.batcher.addBox([2.65, 2.65, 0.025], [featureX, 1.65, outerZ + inset], accent);
+      const count = room.id === 'growth' ? 7 : 13;
+      for (let i = 0; i < count; i++) this.batcher.addBox([0.055, 2.58, 0.028], [featureX - 1.14 + i * 2.28 / (count - 1), 1.65, outerZ + inset * 1.5], wood);
+      this.batcher.addBox([2.76, 0.024, 0.04], [featureX, 2.99, outerZ + inset * 1.5], glow);
+      this.batcher.addBox([11.4, 0.025, 0.025], [cx, 3.05, dividerZ + (north ? -0.02 : 0.02)], metal);
+      if (room.id === 'growth' || room.id === 'ai-systems') {
+        for (let i = 0; i < 3; i++) {
+          const x = cx - 1.35 + i * 1.35;
+          this.batcher.addBox([1.08, 1.25, 0.035], [x, 1.88, dividerZ + 0.04], wood);
+          this.batcher.addBox([0.99, 1.16, 0.02], [x, 1.88, dividerZ + 0.065], paint);
+          this.batcher.addBox([0.52, 0.56 + i * 0.11, 0.015], [x + (i - 1) * 0.10, 1.88, dividerZ + 0.08], accent);
+        }
+      }
+    }
+  }
+
   /**
    * Builds high-end architectural studio entrances with dark steel frames,
    * open commercial glass double doors, and illuminated neon department badges.
@@ -321,7 +366,7 @@ export class OfficeBuilding {
         x: -2.4,
         z: -5.2,
         rotY: Math.PI / 2,
-        color: 0x06B6D4,
+        color: 0xA8BCAA,
         width: 2.8
       },
       {
@@ -330,7 +375,7 @@ export class OfficeBuilding {
         x: -2.4,
         z: 5.2,
         rotY: Math.PI / 2,
-        color: 0x8B5CF6,
+        color: 0xA8BFCC,
         width: 2.8
       },
       {
@@ -339,7 +384,7 @@ export class OfficeBuilding {
         x: 2.4,
         z: -5.2,
         rotY: -Math.PI / 2,
-        color: 0xF59E0B,
+        color: 0xD8C194,
         width: 2.8
       },
       {
@@ -348,7 +393,7 @@ export class OfficeBuilding {
         x: 2.4,
         z: 5.2,
         rotY: -Math.PI / 2,
-        color: 0x10B981,
+        color: 0xD6A28A,
         width: 2.8
       },
       {
@@ -357,7 +402,7 @@ export class OfficeBuilding {
         x: 0,
         z: -10.5,
         rotY: 0,
-        color: 0x06B6D4,
+        color: 0xBBC99F,
         width: 3.2
       }
     ];
@@ -845,7 +890,7 @@ export class OfficeBuilding {
     // Luxury dark executive wall directly behind CEO Ameen's desk!
     const ceoWallZ = -10.35;
     const ceoBackGeo = new THREE.BoxGeometry(5.2, 3.15, 0.04);
-    const ceoBackMat = new THREE.MeshStandardMaterial({ color: 0x0F172A, roughness: 0.85 });
+    const ceoBackMat = new THREE.MeshStandardMaterial({ color: ROOM_DESIGNS.ceo.dark, roughness: 0.72 });
     const ceoBack = new THREE.Mesh(ceoBackGeo, ceoBackMat);
     ceoBack.position.set(8.5, 1.6, ceoWallZ);
     brandGroup.add(ceoBack);

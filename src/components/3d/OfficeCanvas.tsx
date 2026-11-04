@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { OfficeBuilding } from './OfficeBuilding';
 import { OfficeFurniture } from './Furniture';
 import { CharacterFactory, CharacterMeshController } from './Character';
@@ -239,8 +240,8 @@ export const OfficeCanvas: React.FC<OfficeCanvasProps> = React.memo(({
 
     // 1. Scene & Renderer
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x38BDF8);
-    scene.fog = new THREE.FogExp2(0x7DD3FC, 0.006);
+    scene.background = new THREE.Color(0xC7D4D7);
+    scene.fog = new THREE.FogExp2(0xC7D4D7, 0.0045);
 
     const camera = new THREE.PerspectiveCamera(
       56,
@@ -282,10 +283,16 @@ export const OfficeCanvas: React.FC<OfficeCanvasProps> = React.memo(({
 
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.15;
+    // One baked environment supplies soft material reflections without extra frame lights.
+    const environmentScene = new RoomEnvironment();
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const environmentTarget = pmrem.fromScene(environmentScene, 0.025);
+    scene.environment = environmentTarget.texture; scene.environmentIntensity = 0.38;
+    environmentScene.dispose(); pmrem.dispose();
     mount.appendChild(renderer.domElement);
 
     // 2. Lighting
-    const hemiLight = new THREE.HemisphereLight(0xBAE6FD, 0xF1F5F9, 0.95);
+    const hemiLight = new THREE.HemisphereLight(0xF4F1E5, 0xC2B9A7, 0.95);
     hemiLight.position.set(0, 26, 0);
     scene.add(hemiLight);
 
@@ -1157,6 +1164,7 @@ export const OfficeCanvas: React.FC<OfficeCanvasProps> = React.memo(({
       textures.forEach(texture => texture.dispose());
       materials.forEach(material => material.dispose());
       geometries.forEach(geometry => geometry.dispose());
+      environmentTarget.dispose();
       renderer.dispose();
       rendererRef.current = null;
       if (mount.contains(renderer.domElement)) {

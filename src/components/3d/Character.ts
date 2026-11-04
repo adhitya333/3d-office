@@ -1,4 +1,5 @@
 import { createFoodPlate, PlateDish } from './Food';
+import { createEmployeeHair } from './Hairstyles';
 import * as THREE from 'three';
 import { EmployeeDefinition } from '../../types/office';
 import { OfficeTextureGenerator } from './OfficeTextureGenerator';
@@ -647,11 +648,7 @@ export class CharacterFactory {
       headGroup.add(jowl);
     }
 
-    // Employee Block Hair
-    const hairGeo = new THREE.BoxGeometry(headW + 0.02, 0.10, headD + 0.02);
-    const hair = new THREE.Mesh(hairGeo, hairMat);
-    hair.position.y = isCEO ? 0.28 : 0.24;
-    headGroup.add(hair);
+    headGroup.add(createEmployeeHair(emp.id, headW, headD, (isCEO ? 0.18 : 0.16) + headH / 2, hairMat));
 
     // Arms
     const armW = isCEO ? 0.27 : 0.11;

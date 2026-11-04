@@ -1,9 +1,11 @@
 {
-  "provider": "antigravity",
+  "provider": "local-sign-in",
   "model": "gemini-3.8-flash-low",
   "taskModel": "gemini-3.8-flash-medium",
+  "imageModel": "gemini-3.8-flash-low",
   "employees": {
     "adhi": {
+      "model": "gpt-6.1-sol",
       "skill": ".agents/skills/adhi-web-engineering/SKILL.md",
       "name": "Adhi"
     },
@@ -20,10 +22,12 @@
       "name": "Rewu"
     },
     "taha": {
+      "model": "gpt-6.1-sol",
       "skill": ".agents/skills/taha-crm-systems/SKILL.md",
       "name": "Taha"
     },
     "vaibav": {
+      "model": "gpt-6.1-sol",
       "skill": ".agents/skills/vaibav-ai-automation/SKILL.md",
       "name": "Vaibav"
     },

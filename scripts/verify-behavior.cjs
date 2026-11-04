@@ -133,6 +133,24 @@ for (const [roll, expectedState] of [[0, 'COFFEE'], [0.9, 'SNACK'], [0.5, 'SITTI
 }
 Math.random = originalRandom;
 
+// Opposing walkers, including the wider CEO, must pass without sharing a body capsule.
+for (const pair of [['adhi', 'abbu'], ['ameen', 'taha']]) {
+  const traffic = new NPCBrainManager(), collision = new CollisionManager();
+  traffic.setObstacleTest((x,z,r)=>collision.isColliding(x,z,0,r),(x,z,r)=>collision.isTableColliding(x,z,r));
+  for (const id of pair) traffic.registerAgent(OFFICE_CONFIG.employees.find(employee=>employee.id===id),fakeController());
+  const walkers = pair.map(id=>traffic.getAgent(id));
+  walkers.forEach((agent,index)=>{ agent.controller.group.position.set(0,0,index?4:-4); agent.isSeated=false; agent.path=[{x:0,z:index?-4:4}]; agent.pathIndex=0; });
+  const finished = new Set();
+  for(let frame=0;frame<2400;frame++) {
+    for(const agent of walkers) if(!finished.has(agent.config.id) && traffic.followPath(agent,1/30,frame/30,new THREE.Vector3(0,0,17))) finished.add(agent.config.id);
+    const required=walkers.reduce((sum,agent)=>sum+(agent.config.id==='ameen'?0.80:agent.config.capsuleRadius),0)+0.08;
+    assert(walkers[0].controller.group.position.distanceTo(walkers[1].controller.group.position)>=required-0.001,'Opposing walkers must keep their full capsule clearance');
+    if(finished.size===2)break;
+    assert(frame<2399,`Opposing walkers must not deadlock: ${pair.join('/')} ${JSON.stringify(walkers.map(agent=>({pos:agent.controller.group.position,blocked:agent.blockedTimer})))}`);
+  }
+  traffic.clearAgents();
+}
+
 async function testBackgroundWork() {
   const { readChatStream } = require('../src/services/chatStream.ts');
   const encoded = new TextEncoder().encode('data: {"choices":[{"delta":{"content":"Hi ☕"}}]}\r\n\r\ndata: {"choices":[{"delta":{"content":" there"}}]}');
@@ -187,6 +205,10 @@ async function testBackgroundWork() {
   const historyManager = new EmployeeWorkManager(storage, { ...transport, streamChatWithEmployee: async (employee, history) => { historyCount = history.length; return 'Recent context'; } });
   await historyManager.sendMessage({ id: 'history' }, 'Latest request');
   assert.equal(historyCount, 25, 'Long chats keep a bounded recent context within backend message limits');
+  const image = {id:'a'.repeat(32),url:`/api/media/${'a'.repeat(32)}`,name:'Generated image',mime:'image/png'};
+  const imageManager = new EmployeeWorkManager(storage,{...transport,streamChatWithEmployee:async(employee,history,tasks,onChunk,signal,options)=>{assert.equal(options.purpose,'image');options.onImages([image]);return 'Created your image.';}});
+  await imageManager.sendMessage({id:'image-test'},'A walnut office',{generateImage:true});
+  assert.deepEqual(imageManager.getSnapshot('image-test').messages.at(-1).images,[image],'Generated images are saved independently of an open panel');
   storage.saveChatMessage({ id: 'old', employeeId: 'old', delivery: 'thinking', content: 'Thinking…' });
   const reloaded = new EmployeeWorkManager(storage, transport);
   assert.equal(reloaded.getSnapshot('old').messages[0].delivery, 'interrupted', 'Reload recovery must not leave an endless spinner');

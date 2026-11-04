@@ -4,6 +4,7 @@ import { OFFICE_CONFIG } from '../../config/office.config';
 import { DeskFactory, DeskStationController } from './DeskFactory';
 import { OfficeTextureGenerator } from './OfficeTextureGenerator';
 import { GeometryBatcher } from './GeometryBatcher';
+import { ROOM_DESIGNS } from '../../data/roomDesign';
 
 export class OfficeFurniture {
   public group: THREE.Group;
@@ -26,8 +27,8 @@ export class OfficeFurniture {
   }
 
   private buildExecutiveLounge() {
-    const leather = new THREE.MeshStandardMaterial({ color: 0x80715E, roughness: 0.9 });
-    const cushion = new THREE.MeshStandardMaterial({ color: 0xB9AC96, roughness: 0.95 });
+    const leather = new THREE.MeshStandardMaterial({ color: ROOM_DESIGNS.ceo.fabric, roughness: 0.92 });
+    const cushion = new THREE.MeshStandardMaterial({ color: 0xA3957B, roughness: 0.95 });
     const walnut = this.sharedMaterials['walnutWood'];
     const brass = this.sharedMaterials['goldTrim'];
     const dark = this.sharedMaterials['blackSteel'];
@@ -695,7 +696,7 @@ export class OfficeFurniture {
     const rugGeo = new THREE.BoxGeometry(5.2, 0.015, 4.4);
     const rug = new THREE.Mesh(
       rugGeo,
-      new THREE.MeshStandardMaterial({ color: 0x1E1B18, roughness: 0.85 })
+      new THREE.MeshStandardMaterial({ color: 0x8C8576, roughness: 0.95 })
     );
     rug.position.set(0, 0.01, 3.3);
     ceoCredenza.add(rug);

@@ -3,17 +3,24 @@ import { TaskDeliverable } from '../types/integration';
 import { StorageService } from './storage';
 import { npcBrain } from './npcBrain';
 import { readChatStream } from './chatStream';
+import type { ChatImage, ChatOptions, ChatTurn } from '../types/chat';
+import { prepareChatImage } from './chatImages';
 
 export interface EmployeeAIConfig { model: string; taskModel: string; connected: boolean; }
+interface EmployeeModel { model: string | null; taskModel: string | null; imageModel: string | null; provider: string; preferredModel: string; fallback: boolean; }
+interface ProviderConnection { configured: boolean; error?: string | null; }
 
 export class EmployeeAIService {
-  private static connection = { configured: false, authenticated: false, requiresLogin: false, model: 'gemini-3.8-flash-low', taskModel: 'gemini-3.8-flash-medium', error: null as string | null };
+  private static connection = { configured: false, authenticated: false, requiresLogin: false, model: 'gemini-3.8-flash-low', taskModel: 'gemini-3.8-flash-medium', employeeModels: {} as Record<string,EmployeeModel>, availableModels: [] as string[], providers: {} as Record<string,ProviderConnection>, error: null as string | null };
   private static checking: Promise<typeof EmployeeAIService.connection> | null = null;
   private static checkedAt = 0;
 
   public static isConfigured(): boolean { return this.connection.configured && this.connection.authenticated; }
-  public static getModel(): string { return this.connection.model; }
-  public static getConfig(): EmployeeAIConfig { return { model: this.getModel(), taskModel: this.connection.taskModel, connected: this.isConfigured() }; }
+  public static getModel(employeeId?: string): string { return employeeId ? this.connection.employeeModels[employeeId]?.model || this.connection.model : this.connection.model; }
+  public static getConfig(employeeId?: string): EmployeeAIConfig { return { model: this.getModel(employeeId), taskModel: employeeId ? this.connection.employeeModels[employeeId]?.taskModel || this.connection.taskModel : this.connection.taskModel, connected: this.isConfigured() }; }
+  public static getAvailableModels() { return this.connection.availableModels; }
+  public static getProviders() { return this.connection.providers; }
+  public static getEmployeeModel(employeeId: string) { return this.connection.employeeModels[employeeId]; }
   public static async refreshConnection(force = false) {
     // Purge legacy browser credentials; this app now uses the official CLI sign-in only.
     try { for (const key of Object.keys(localStorage)) if (/^VERLYN_.*API_KEY$/i.test(key)) localStorage.removeItem(key); } catch { /* Storage may be disabled. */ }
@@ -25,7 +32,7 @@ export class EmployeeAIService {
         if (!response.ok) throw new Error('Backend unavailable');
         const status = await response.json();
         this.connection = { configured: status.configured === true, authenticated: status.authenticated === true,
-          requiresLogin: status.requiresLogin === true, model: String(status.model || this.connection.model), taskModel: String(status.taskModel || this.connection.taskModel), error: typeof status.error === 'string' ? status.error : null };
+          requiresLogin: status.requiresLogin === true, model: String(status.model || this.connection.model), taskModel: String(status.taskModel || this.connection.taskModel), employeeModels: status.employeeModels || {}, availableModels: status.availableModels || [], providers: status.providers || {}, error: typeof status.error === 'string' ? status.error : null };
       } catch { this.connection = { ...this.connection, configured: false, authenticated: false }; }
       this.checkedAt = Date.now();
       window.dispatchEvent(new Event('office-ai-connection'));
@@ -33,25 +40,36 @@ export class EmployeeAIService {
     })().finally(() => { this.checking = null; });
     return this.checking;
   }
-  private static async getReadyConfig(): Promise<EmployeeAIConfig> {
+  private static async getReadyConfig(employeeId?: string): Promise<EmployeeAIConfig> {
     const status = await this.refreshConnection();
     if (!status.authenticated) throw new Error('Connect with the office access password in AI settings.');
-    if (!status.configured) throw new Error(status.error || 'Check the Antigravity connection in AI settings.');
-    return this.getConfig();
+    if (!status.configured) throw new Error(status.error || 'Check ChatGPT or Antigravity in Connection settings.');
+    return this.getConfig(employeeId);
   }
   public static getConnectionError() { return this.connection.error; }
   public static requiresOfficeLogin() { return this.connection.requiresLogin; }
   public static async checkAntigravity() {
     const response = await fetch('/api/ai/check', { method: 'POST', credentials: 'same-origin' });
-    if (!response.ok) throw new Error('Could not check Antigravity. Sign in to this office first.');
+    if (!response.ok) throw new Error('Could not check connections. Sign in to this office first.');
     await this.refreshConnection(true);
-    if (!this.isConfigured()) throw new Error(this.connection.error || 'Antigravity needs sign-in.');
+    if (!this.isConfigured()) throw new Error(this.connection.error || 'ChatGPT or Antigravity needs sign-in.');
   }
   public static async signInAntigravity() {
     const response = await fetch('/api/ai/sign-in', { method: 'POST', credentials: 'same-origin' });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error?.message || 'Open the official Antigravity client on this computer.');
     return data;
+  }
+  public static async signInChatGPT() {
+    const response = await fetch('/api/ai/chatgpt/sign-in', { method:'POST',credentials:'same-origin' });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || 'Open the official ChatGPT sign-in on this computer.');
+    return data;
+  }
+  public static async setEmployeeModel(employeeId: string, model: string) {
+    const response = await fetch('/api/ai/model', { method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({employeeId,model}) });
+    if (!response.ok) throw new Error('Could not save this model. Check the account connection and try again.');
+    await this.refreshConnection(true);
   }
   public static async connect(password: string) {
     const response = await fetch('/api/session', { method: 'POST', credentials: 'same-origin',
@@ -63,6 +81,14 @@ export class EmployeeAIService {
   public static async disconnect() {
     await fetch('/api/session', { method: 'DELETE', credentials: 'same-origin' });
     await this.refreshConnection(true);
+  }
+
+  public static async uploadImage(employeeId: string, file: File): Promise<ChatImage> {
+    const image = await prepareChatImage(file);
+    const response = await fetch('/api/media', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...image, employeeId }) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || 'Could not attach this image.');
+    return data;
   }
 
   /**
@@ -246,7 +272,7 @@ Answer directly, warmly and concretely. Usually use 1–4 sentences, under 120 w
   }
 
   /** Keep the current request intact and bound older context; full chats stay saved locally. */
-  private static recentConversation(conversation: { role: 'user' | 'assistant'; content: string }[]) {
+  private static recentConversation(conversation: ChatTurn[]) {
     const recent: typeof conversation = [];
     let size = 0;
     for (let i = conversation.length - 1; i >= 0 && recent.length < 16; i--) {
@@ -265,7 +291,7 @@ Answer directly, warmly and concretely. Usually use 1–4 sentences, under 120 w
     employee: EmployeeDefinition,
     onProgress?: (status: string) => void
   ): Promise<TaskDeliverable> {
-    const config = await this.getReadyConfig();
+    const config = await this.getReadyConfig(employee.id);
     const model = config.taskModel;
 
     // Determine deliverable type
@@ -374,18 +400,13 @@ Execute this assignment and generate the complete deliverable now.`;
    */
   public static async chatWithEmployee(
     employee: EmployeeDefinition,
-    conversation: { role: 'user' | 'assistant'; content: string }[],
+    conversation: ChatTurn[],
     activeTasks: EmployeeTask[] = []
   ): Promise<string> {
     const officeReply = npcBrain.handlePlayerCommand(conversation[conversation.length - 1]?.content || '', employee.id);
     if (officeReply) { return officeReply; }
-    const config = await this.getReadyConfig();
+    const config = await this.getReadyConfig(employee.id);
 
-
-    const lastUserMsg = conversation[conversation.length - 1]?.content || '';
-    if (npcBrain.checkNaturalLanguageCommand(lastUserMsg, employee.id)) {
-      return `Understood! I'm heading back to my desk right away to continue our procurement objectives. See you there!`;
-    }
 
     const systemPrompt = this.getChatPrompt(employee, conversation, activeTasks);
 
@@ -399,7 +420,7 @@ Execute this assignment and generate the complete deliverable now.`;
         model: config.model,
         messages: [
           { role: 'system', content: systemPrompt },
-          ...this.recentConversation(conversation)
+          ...this.recentConversation(conversation).map(message => ({ role: message.role, content: message.content, imageIds: message.images?.map(image => image.id) }))
         ],
         temperature: 0.6,
         max_tokens: 600
@@ -420,24 +441,18 @@ Execute this assignment and generate the complete deliverable now.`;
    */
   public static async streamChatWithEmployee(
     employee: EmployeeDefinition,
-    conversation: { role: 'user' | 'assistant'; content: string }[],
+    conversation: ChatTurn[],
     activeTasks: EmployeeTask[] = [],
     onTokenChunk: (accumulated: string, delta: string) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    options: ChatOptions = {}
   ): Promise<string> {
-    const officeReply = npcBrain.handlePlayerCommand(conversation[conversation.length - 1]?.content || '', employee.id);
+    const officeReply = options.purpose !== 'image' && !conversation[conversation.length - 1]?.images?.length ? npcBrain.handlePlayerCommand(conversation[conversation.length - 1]?.content || '', employee.id) : null;
     if (officeReply) { onTokenChunk(officeReply, officeReply); return officeReply; }
-    const config = await this.getReadyConfig();
+    const config = await this.getReadyConfig(employee.id);
 
 
 
-
-    const lastUserMsg = conversation[conversation.length - 1]?.content || '';
-    if (npcBrain.checkNaturalLanguageCommand(lastUserMsg, employee.id)) {
-      const ack = `Understood! I'm heading back to my desk right away to continue our procurement objectives. See you there!`;
-      onTokenChunk(ack, ack);
-      return ack;
-    }
 
     const systemPrompt = this.getChatPrompt(employee, conversation, activeTasks);
 
@@ -450,10 +465,11 @@ Execute this assignment and generate the complete deliverable now.`;
       body: JSON.stringify({
         employeeId: employee.id,
         model: config.model,
+        purpose: options.purpose || 'chat',
         stream: true,
         messages: [
           { role: 'system', content: systemPrompt },
-          ...this.recentConversation(conversation)
+          ...this.recentConversation(conversation).map(message => ({ role: message.role, content: message.content, imageIds: message.images?.map(image => image.id) }))
         ],
         temperature: 0.6,
         max_tokens: 600
@@ -466,7 +482,7 @@ Execute this assignment and generate the complete deliverable now.`;
     }
 
     if (!response.body) throw new Error('The AI response was empty. Please retry.');
-    return readChatStream(response.body, onTokenChunk);
+    return readChatStream(response.body, onTokenChunk, options.onImages, options.onModel);
   }
 
   /**
@@ -476,7 +492,7 @@ Execute this assignment and generate the complete deliverable now.`;
     employee: EmployeeDefinition,
     task?: EmployeeTask
   ): Promise<string> {
-    const config = await this.getReadyConfig();
+    const config = await this.getReadyConfig(employee.id);
 
 
     const prompt = task
